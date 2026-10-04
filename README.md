@@ -7,7 +7,7 @@ Page d'accueil de l'écosystème OLYCITY. Elle renvoie vers chaque service :
 | `olycity.fr` | ce dépôt (hub) | GitHub Pages |
 | `tracker.olycity.fr` | `OLYVALO` | GitHub Pages |
 | `musique.olycity.fr` | `discord-music-bot` | VPS Netcup (Caddy) |
-| `games.olycity.fr` | à venir | — |
+| `games.olycity.fr` | `olycity-games` | GitHub Pages |
 
 Site statique, sans build : `index.html`, `assets/`, `manifest.webmanifest`.
 Les couleurs et polices reprennent celles du tracker (`OLYVALO/css/tokens.css`).
@@ -22,11 +22,7 @@ Les couleurs et polices reprennent celles du tracker (`OLYVALO/css/tokens.css`).
 | *(vide)* | A | `185.199.111.153` |
 | `www` | CNAME | `liam-thorel.github.io.` |
 | `tracker` | CNAME | `liam-thorel.github.io.` |
+| `games` | CNAME | `liam-thorel.github.io.` |
 | `musique` | A | IP du VPS (déjà en place) |
 
 Supprimer les entrées A/AAAA par défaut d'OVH sur la racine (page de parking).
-
-## Ouvrir games.olycity.fr
-
-Dans `index.html`, transformer la carte `.games` en `<a href="https://games.olycity.fr">`
-et remplacer le badge « Bientôt » par `data-probe="https://games.olycity.fr/"`.
