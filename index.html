@@ -2,6 +2,19 @@
 <html lang="fr" data-theme="dark">
 <head>
   <meta charset="utf-8">
+  <!-- Fond sombre AVANT le premier rendu : en arrivant du tracker, l'écran
+       ne doit pas flasher en blanc le temps que la page se charge. -->
+  <meta name="color-scheme" content="dark">
+  <script>
+    // Arrivée depuis le tracker (clic sur sa roue) : la roue vient de voler
+    // jusqu'à sa place ici. On l'affiche en place, et le reste apparaît
+    // autour d'elle. L'adresse est nettoyée pour qu'un rechargement ne
+    // rejoue pas l'arrivée.
+    if (new URLSearchParams(location.search).has('roue')) {
+      document.documentElement.classList.add('arrivee');
+      history.replaceState(null, '', location.pathname + location.hash);
+    }
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>OLYCITY</title>
   <meta name="description" content="Le hub du Discord OLYCITY : tracker Valorant & League, bot musique et jeux coop.">
@@ -51,7 +64,23 @@
     main { position:relative; z-index:1; flex:1; width:100%; max-width:1180px; margin:0 auto; padding:clamp(40px,8vh,96px) 16px 48px; }
 
     .hero { display:flex; flex-direction:column; align-items:center; text-align:center; gap:18px; margin-bottom:clamp(36px,7vh,72px); }
-    .hero img { width:clamp(84px,12vw,112px); height:auto; filter:drop-shadow(0 10px 30px rgba(255,70,86,.25)); }
+    /* Taille et position reproduites par OLYVALO/js/hub-transition.mjs
+       (hubLogoRect) pour faire atterrir la roue du tracker ici : À GARDER
+       SYNCHRONISÉ avec le padding-top de <main> et cette largeur. */
+    .hero .logo { display:block; width:clamp(84px,12vw,112px); height:auto; aspect-ratio:200/220; overflow:visible;
+                  filter:drop-shadow(0 10px 30px rgba(255,70,86,.25)); }
+    .hero .logo .wheel { transform-origin:100px 100px; animation:spin 12s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+
+    /* Arrivée depuis le tracker : la roue est déjà là, le reste la rejoint. */
+    .arrivee .hero h1, .arrivee .hero p, .arrivee .grid, .arrivee footer { animation:monte .7s cubic-bezier(.22,1,.36,1) both; }
+    .arrivee .hero h1 { animation-delay:.05s; }
+    .arrivee .hero p { animation-delay:.12s; }
+    .arrivee .grid { animation-delay:.2s; }
+    .arrivee footer { animation-delay:.3s; }
+    .arrivee .bg { animation:fondu 1.2s ease-out both; }
+    @keyframes monte { from { opacity:0; transform:translateY(14px); } }
+    @keyframes fondu { from { opacity:0; } }
     .hero h1 { font:700 clamp(38px,8vw,72px)/1 'Tomorrow', sans-serif; letter-spacing:clamp(4px,1.2vw,10px); }
     .hero h1 span { color:var(--red); }
     .hero p { max-width:520px; color:var(--muted); font-size:clamp(15px,1.8vw,17px); }
@@ -132,7 +161,59 @@
 
   <main>
     <header class="hero">
-      <img src="assets/logo.svg" alt="" width="112" height="123">
+      <!-- Roue en SVG intégré, pas en <img> : une image peut n'apparaître
+           qu'une frame après la page, et la roue arrivant du tracker
+           clignoterait. Même dessin que assets/logo.svg (gardé pour l'icône). -->
+      <svg class="logo" viewBox="0 0 200 220" width="112" height="123" aria-hidden="true">
+        <!-- Support legs -->
+        <line x1="100" y1="188" x2="55" y2="215" stroke="#ff4656" stroke-width="4" stroke-linecap="round"/>
+        <line x1="100" y1="188" x2="145" y2="215" stroke="#ff4656" stroke-width="4" stroke-linecap="round"/>
+        <line x1="55" y1="215" x2="145" y2="215" stroke="#a87fff" stroke-width="3" stroke-linecap="round"/>
+
+        <g class="wheel">
+        <!-- Outer ring -->
+        <circle cx="100" cy="100" r="88" fill="none" stroke="#ff4656" stroke-width="4"/>
+        <circle cx="100" cy="100" r="84" fill="none" stroke="#a87fff" stroke-width="1" opacity="0.4"/>
+
+        <!-- 8 spokes -->
+        <line x1="100" y1="12" x2="100" y2="188" stroke="#a87fff" stroke-width="2" opacity="0.7"/>
+        <line x1="12" y1="100" x2="188" y2="100" stroke="#a87fff" stroke-width="2" opacity="0.7"/>
+        <line x1="37.8" y1="37.8" x2="162.2" y2="162.2" stroke="#3fcfcf" stroke-width="2" opacity="0.6"/>
+        <line x1="162.2" y1="37.8" x2="37.8" y2="162.2" stroke="#3fcfcf" stroke-width="2" opacity="0.6"/>
+
+        <!-- Inner ring -->
+        <circle cx="100" cy="100" r="30" fill="none" stroke="#ff4656" stroke-width="2" opacity="0.5"/>
+
+        <!-- Inner spokes short -->
+        <line x1="100" y1="70" x2="100" y2="12" stroke="#ff4656" stroke-width="1.5" opacity="0.4"/>
+        <line x1="100" y1="130" x2="100" y2="188" stroke="#ff4656" stroke-width="1.5" opacity="0.4"/>
+        <line x1="70" y1="100" x2="12" y2="100" stroke="#ff4656" stroke-width="1.5" opacity="0.4"/>
+        <line x1="130" y1="100" x2="188" y2="100" stroke="#ff4656" stroke-width="1.5" opacity="0.4"/>
+
+        <!-- Gondolas — 8 cabins on outer ring -->
+        <!-- Top -->
+        <rect x="91" y="5" width="18" height="14" rx="3" fill="#ff4656"/>
+        <!-- Top-right -->
+        <rect x="153" y="33" width="18" height="14" rx="3" fill="#a87fff"/>
+        <!-- Right -->
+        <rect x="181" y="93" width="18" height="14" rx="3" fill="#3fcfcf"/>
+        <!-- Bottom-right -->
+        <rect x="153" y="153" width="18" height="14" rx="3" fill="#ff4656"/>
+        <!-- Bottom -->
+        <rect x="91" y="181" width="18" height="14" rx="3" fill="#a87fff"/>
+        <!-- Bottom-left -->
+        <rect x="29" y="153" width="18" height="14" rx="3" fill="#3fcfcf"/>
+        <!-- Left -->
+        <rect x="1" y="93" width="18" height="14" rx="3" fill="#ff4656"/>
+        <!-- Top-left -->
+        <rect x="29" y="33" width="18" height="14" rx="3" fill="#a87fff"/>
+
+        <!-- Center hub -->
+        <circle cx="100" cy="100" r="10" fill="#ff4656"/>
+        <circle cx="100" cy="100" r="6" fill="#a87fff"/>
+        <circle cx="100" cy="100" r="3" fill="#fff"/>
+        </g>
+      </svg>
       <h1>OLY<span>CITY</span></h1>
       <p>Tous les outils du Discord au même endroit : stats, musique et soirées jeux.</p>
     </header>
