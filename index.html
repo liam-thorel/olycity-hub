@@ -5,7 +5,13 @@
   <!-- Fond sombre AVANT le premier rendu : en arrivant du tracker, l'écran
        ne doit pas flasher en blanc le temps que la page se charge. -->
   <meta name="color-scheme" content="dark">
-  <script>
+  <script type="module">
+    import { initSiteSwitcher } from './site-switcher.mjs';
+    const toolbar = document.createElement('nav');
+    toolbar.setAttribute('aria-label', 'Sites OLYCITY');
+    toolbar.style.cssText = 'display:flex;justify-content:flex-end;padding:12px 20px;position:relative;z-index:10';
+    document.body.prepend(toolbar);
+    initSiteSwitcher(toolbar);
     // Arrivée depuis le tracker (clic sur sa roue) : la roue vient de voler
     // jusqu'à sa place ici. On l'affiche en place, et le reste apparaît
     // autour d'elle. L'adresse est nettoyée pour qu'un rechargement ne
