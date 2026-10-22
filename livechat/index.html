@@ -1,0 +1,574 @@
+<!doctype html>
+<html lang="fr" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Livechat · OLYCITY</title>
+  <meta name="description" content="Afficher une image, un GIF, une vidéo ou un texte sur l'écran des membres OLYCITY.">
+  <meta name="theme-color" content="#0a0c10">
+  <link rel="icon" href="../assets/logo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tomorrow:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* Mêmes jetons que le hub et le tracker (OLYVALO/css/tokens.css). */
+    :root {
+      --red:#ff4656; --red-low:rgba(255,70,86,.12); --red-mid:rgba(255,70,86,.3);
+      --violet:#a87fff; --cyan:#3fcfcf; --gold:#f5c842; --green:#4bd07b;
+      --bg:#0a0c10; --surf:#10131a; --surf2:#151922; --surf3:#1b202b;
+      --border:rgba(255,255,255,.075); --border2:rgba(255,255,255,.14);
+      --text:#e2e5ee; --muted:#9298ab; --dim:#62697e;
+      color-scheme: dark;
+    }
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+    [hidden] { display:none !important; }
+    body { min-height:100vh; min-height:100dvh; background:var(--bg); color:var(--text); font:15px/1.5 'DM Sans', system-ui, sans-serif; overflow-x:hidden; }
+    a { color:inherit; }
+    button, input, select { font:inherit; color:inherit; }
+
+    .bg { position:fixed; inset:0; pointer-events:none; z-index:0; }
+    .bg::before { content:''; position:absolute; inset:0; background:radial-gradient(circle at 10% -10%, var(--red-low), transparent 45%), radial-gradient(circle at 100% 110%, rgba(168,127,255,.08), transparent 45%); }
+
+    main { position:relative; z-index:1; max-width:1240px; margin:0 auto; padding:28px 16px 48px; }
+    header { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px 24px; margin-bottom:24px; }
+    .brand { display:flex; align-items:center; gap:12px; text-decoration:none; }
+    .brand img { width:38px; height:38px; }
+    .brand h1 { font:700 26px/1 'Tomorrow', sans-serif; letter-spacing:4px; }
+    .brand h1 span { color:var(--red); }
+    .online { display:flex; flex-wrap:wrap; align-items:center; gap:6px; color:var(--muted); font-size:13px; }
+    .online .dot { width:8px; height:8px; border-radius:50%; background:var(--dim); }
+    .online.has .dot { background:var(--green); box-shadow:0 0 0 4px rgba(75,208,123,.15); }
+    .chip { display:inline-flex; align-items:center; gap:6px; padding:3px 10px 3px 3px; border:1px solid var(--border2); border-radius:99px; background:var(--surf2); font-size:13px; color:var(--text); }
+    .chip img, .chip i { width:20px; height:20px; border-radius:50%; object-fit:cover; background:var(--surf3); }
+
+    .layout { display:grid; grid-template-columns:minmax(0, 400px) minmax(0, 1fr); gap:20px; align-items:start; }
+    .panel { border:1px solid var(--border); border-radius:12px; background:var(--surf); padding:18px; display:flex; flex-direction:column; gap:18px; }
+    .field { display:flex; flex-direction:column; gap:8px; }
+    .label { font:600 12px/1 'Tomorrow', sans-serif; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); display:flex; justify-content:space-between; }
+    .label b { color:var(--text); font-weight:600; letter-spacing:0; text-transform:none; font-family:'DM Sans', sans-serif; }
+
+    select, input[type=text] { width:100%; height:42px; padding:0 12px; border:1px solid var(--border2); border-radius:8px; background:var(--surf2); outline:none; }
+    select:focus, input[type=text]:focus { border-color:var(--red); }
+
+    .drop { position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; min-height:132px; padding:16px; border:1.5px dashed var(--border2); border-radius:10px; background:var(--surf2); text-align:center; color:var(--muted); cursor:pointer; transition:border-color .2s, background .2s; }
+    .drop:hover, .drop.over { border-color:var(--red); background:var(--red-low); }
+    .drop strong { color:var(--text); }
+    .drop small { font-size:12px; color:var(--dim); }
+    .drop input { position:absolute; inset:0; opacity:0; cursor:pointer; }
+    .file { display:none; align-items:center; gap:10px; padding:8px; border:1px solid var(--border2); border-radius:10px; background:var(--surf2); }
+    .file.show { display:flex; }
+    .file img, .file video { width:56px; height:56px; border-radius:6px; object-fit:cover; background:#000; }
+    .file div { flex:1; min-width:0; font-size:13px; }
+    .file div span { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .file div small { color:var(--muted); }
+    .ghost { border:1px solid var(--border2); background:transparent; border-radius:8px; padding:6px 10px; cursor:pointer; color:var(--muted); }
+    .ghost:hover { color:var(--text); border-color:var(--text); }
+
+    .seg { display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px; padding:4px; border:1px solid var(--border2); border-radius:10px; background:var(--surf2); }
+    .seg button { height:34px; border:0; border-radius:7px; background:transparent; color:var(--muted); font-weight:600; cursor:pointer; }
+    .seg button[aria-pressed=true] { background:var(--red); color:#fff; }
+    .seg button:focus-visible { outline:2px solid var(--red); outline-offset:1px; }
+
+    .targets { display:flex; flex-wrap:wrap; gap:6px; }
+    .targets button { display:inline-flex; align-items:center; gap:6px; padding:4px 11px 4px 4px; border:1px solid var(--border2); border-radius:99px; background:var(--surf2); cursor:pointer; color:var(--muted); font-size:13px; }
+    .targets button.all { padding-left:11px; }
+    .targets button img, .targets button i { width:22px; height:22px; border-radius:50%; object-fit:cover; background:var(--surf3); }
+    .targets button.on img { box-shadow:0 0 0 2px var(--green); }
+    .targets button[aria-pressed=true] { border-color:var(--red); background:var(--red-low); color:var(--text); }
+
+    .row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    input[type=range] { width:100%; accent-color:var(--red); }
+    .toggle { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:14px; cursor:pointer; }
+    .toggle input { accent-color:var(--red); width:16px; height:16px; }
+
+    .send { height:50px; border:0; border-radius:10px; background:var(--red); color:#fff; font:700 15px/1 'Tomorrow', sans-serif; letter-spacing:2px; text-transform:uppercase; cursor:pointer; position:relative; overflow:hidden; transition:filter .2s, transform .1s; }
+    .send:hover { filter:brightness(1.08); }
+    .send:active { transform:scale(.99); }
+    .send:disabled { opacity:.55; cursor:wait; }
+    .send .bar { position:absolute; inset:auto 0 0 0; height:3px; background:rgba(255,255,255,.7); transform-origin:left; transform:scaleX(0); }
+    .status { min-height:20px; font-size:14px; color:var(--muted); }
+    .status.ok { color:var(--green); }
+    .status.err { color:var(--red); }
+
+    .stage { position:sticky; top:16px; display:flex; flex-direction:column; gap:10px; }
+    .screen { position:relative; aspect-ratio:16/9; border-radius:12px; overflow:hidden; border:1px solid var(--border2); background:linear-gradient(160deg, #1d2b36, #13231c 55%, #2a1d22); user-select:none; touch-action:none; container-type:inline-size; }
+    .screen::before { content:''; position:absolute; inset:0; background:repeating-linear-gradient(0deg, transparent 0 3px, rgba(255,255,255,.015) 3px 4px), radial-gradient(circle at 50% 120%, rgba(0,0,0,.6), transparent 60%); }
+    .hud { position:absolute; left:50%; bottom:2%; transform:translateX(-50%); width:34%; height:9%; border-radius:6px; background:rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.06); }
+    .minimap { position:absolute; right:1.5%; bottom:2%; width:15%; aspect-ratio:1; border-radius:4px; background:rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.06); }
+    .box { position:absolute; }
+    .box.custom { cursor:move; outline:1.5px dashed rgba(255,255,255,.55); outline-offset:3px; }
+    .media { position:absolute; inset:0; border-radius:1.6cqw; overflow:hidden; background:rgba(0,0,0,.25); }
+    .media img, .media video { width:100%; height:100%; object-fit:fill; display:block; }
+    .caption, .tag span { font-family:'Arial Black', 'Segoe UI Black', system-ui, sans-serif; font-weight:900; color:#fff; -webkit-text-stroke:.34em #000; paint-order:stroke fill; line-height:1.15; }
+    .caption { position:absolute; left:50%; transform:translateX(-50%); text-align:center; overflow-wrap:anywhere; }
+    .tag { position:absolute; display:flex; align-items:center; gap:.4em; white-space:nowrap; }
+    .tag img, .tag i { border-radius:50%; border:.09em solid var(--red); object-fit:cover; background:#1b1f2a; }
+    .tag span { text-transform:uppercase; }
+    .handle { position:absolute; right:-9px; bottom:-9px; width:18px; height:18px; border-radius:50%; background:#fff; border:3px solid var(--red); cursor:nwse-resize; display:none; }
+    .box.custom .handle { display:block; }
+    .hint { font-size:13px; color:var(--dim); }
+    .empty { position:absolute; inset:0; display:grid; place-items:center; color:rgba(255,255,255,.35); font-size:14px; }
+
+    @media (max-width:860px) {
+      .layout { grid-template-columns:1fr; }
+      .stage { position:static; order:-1; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg"></div>
+  <main>
+    <header>
+      <a class="brand" href="/"><img src="../assets/logo.svg" alt=""><h1>LIVE<span>CHAT</span></h1></a>
+      <div class="online" id="online"><span class="dot"></span><span>Recherche des écrans connectés…</span></div>
+    </header>
+
+    <div class="layout">
+      <form class="panel" id="form" novalidate>
+        <div class="field">
+          <label class="label" for="profile">Qui envoie ?</label>
+          <select id="profile" required><option value="">Chargement du roster…</option></select>
+        </div>
+
+        <div class="field">
+          <span class="label">Média <b id="mediaHint">facultatif</b></span>
+          <label class="drop" id="drop">
+            <strong>Dépose une image, un GIF ou une vidéo</strong>
+            <span>ou clique, ou colle avec Ctrl+V</span>
+            <small id="limit">10 Mo maximum · les photos trop lourdes sont réduites automatiquement</small>
+            <input type="file" id="file" accept="image/*,video/mp4,video/webm,video/quicktime">
+          </label>
+          <div class="file" id="fileCard">
+            <span id="thumb"></span>
+            <div><span id="fileName"></span><small id="fileMeta"></small></div>
+            <button type="button" class="ghost" id="clearFile">Retirer</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="label" for="text">Texte <b><span id="count">0</span>/220</b></label>
+          <input type="text" id="text" maxlength="220" placeholder="Grim avec les couilles de Maxime" autocomplete="off">
+        </div>
+
+        <div class="field">
+          <span class="label">Pour qui ?</span>
+          <div class="targets" id="targets"></div>
+        </div>
+
+        <div class="field">
+          <span class="label">Format</span>
+          <div class="seg" id="sizes" role="group" aria-label="Format">
+            <button type="button" data-size="grand">Grand</button>
+            <button type="button" data-size="moyen" aria-pressed="true">Moyen</button>
+            <button type="button" data-size="petit">Petit</button>
+            <button type="button" data-size="custom">Perso</button>
+          </div>
+          <span class="hint" id="customHint" hidden>Déplace le cadre dans l'aperçu, la poignée blanche change sa taille.</span>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <span class="label">Texte</span>
+            <div class="seg" id="textPos" role="group" aria-label="Position du texte">
+              <button type="button" data-pos="haut">Haut</button>
+              <button type="button" data-pos="bas" aria-pressed="true">Bas</button>
+            </div>
+          </div>
+          <div class="field">
+            <label class="label" for="duration">Durée <b id="durationLabel">auto</b></label>
+            <input type="range" id="duration" min="0" max="30" step="1" value="0">
+          </div>
+        </div>
+
+        <label class="toggle"><input type="checkbox" id="muted"> Vidéo sans le son</label>
+
+        <button class="send" id="send" type="submit"><span id="sendLabel">Envoyer à l'écran</span><span class="bar" id="bar"></span></button>
+        <p class="status" id="status" role="status"></p>
+      </form>
+
+      <section class="stage" aria-label="Aperçu">
+        <div class="screen" id="screen">
+          <div class="hud"></div><div class="minimap"></div>
+          <div class="box" id="box">
+            <div class="media" id="media"></div>
+            <div class="handle" id="handle"></div>
+          </div>
+          <div class="caption" id="caption"></div>
+          <div class="tag" id="tag"></div>
+          <div class="empty" id="empty">L'aperçu de l'écran des joueurs apparaît ici</div>
+        </div>
+        <span class="hint">Aperçu à l'échelle d'un écran 16:9. Posté aussi dans le salon #livechat du Discord. Chacun peut couper l'affichage chez lui avec LIVECHAT.bat, et passer un média avec Ctrl+Maj+F9.</span>
+      </section>
+    </div>
+  </main>
+
+  <script type="module">
+    // URL du Worker workers/livechat (dépôt OLYVALO), affichée par `wrangler deploy`.
+    const LIVECHAT_ENDPOINT = 'https://olycity-livechat.olycity.workers.dev';
+    const FIREBASE = 'https://realtime-database-5bb9f-default-rtdb.europe-west1.firebasedatabase.app';
+    const MEMBERS_URL = 'https://tracker.olycity.fr/data/members.json';
+    const MAX_UPLOAD = 10 * 1024 * 1024;
+    const RECEIVER_FRESH_MS = 5 * 60 * 1000;
+    const PROFILE_KEY = 'olycity-livechat-profile';
+    // Mêmes zones que l'affichage réel (OLYVALO/live/livechat-utils.js).
+    const PRESETS = {
+      grand: { cx:.5, cy:.47, w:.72, h:.8 },
+      moyen: { cx:.5, cy:.42, w:.46, h:.52 },
+      petit: { cx:.83, cy:.24, w:.27, h:.3 },
+    };
+
+    const $ = id => document.getElementById(id);
+    const state = {
+      members: [], receivers: {}, file: null, fileUrl: '', kind: null, natural: null,
+      size: 'moyen', custom: { cx:.5, cy:.45, w:.4, h:.4 }, textPos: 'bas', target: '',
+    };
+
+    const escapeHtml = value => String(value).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+    const avatarHtml = member => member?.avatar ? `<img src="${escapeHtml(member.avatar)}" alt="" loading="lazy">` : '<i></i>';
+    const profile = () => state.members.find(member => member.id === $('profile').value) || null;
+    const onlineIds = () => new Set(Object.entries(state.receivers)
+      .filter(([, r]) => r && r.enabled !== false && Date.now() - Number(r.ts || 0) <= RECEIVER_FRESH_MS)
+      .map(([id]) => id));
+
+    // ─── Membres et écrans connectés ─────────────────────────────────────
+    async function loadMembers() {
+      const [list, overlay] = await Promise.all([
+        fetch(MEMBERS_URL).then(r => r.json()).catch(() => []),
+        fetch(`${FIREBASE}/rosterOverlay/members.json`).then(r => r.json()).catch(() => null),
+      ]);
+      const members = new Map((Array.isArray(list) ? list : []).map(m => [m.id, { id: m.id, name: m.name, avatar: m.avatar || null }]));
+      Object.entries(overlay || {}).forEach(([id, m]) => { if (!members.has(id) && m?.name) members.set(id, { id, name: m.name, avatar: m.avatar || null }); });
+      state.members = [...members.values()].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+      let saved = '';
+      try { saved = localStorage.getItem(PROFILE_KEY) || ''; } catch { /* navigation privée */ }
+      $('profile').innerHTML = '<option value="">Choisis ton profil</option>'
+        + state.members.map(m => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)}</option>`).join('');
+      if (state.members.some(m => m.id === saved)) $('profile').value = saved;
+      renderTargets();
+      render();
+    }
+
+    async function loadReceivers() {
+      state.receivers = await fetch(`${FIREBASE}/livechat/receivers.json`).then(r => r.json()).catch(() => state.receivers) || {};
+      const online = state.members.filter(m => onlineIds().has(m.id));
+      const box = $('online');
+      box.classList.toggle('has', online.length > 0);
+      box.innerHTML = '<span class="dot"></span>' + (online.length
+        ? `<span>${online.length} écran${online.length > 1 ? 's' : ''} connecté${online.length > 1 ? 's' : ''}</span>`
+          + online.map(m => `<span class="chip">${avatarHtml(m)}${escapeHtml(m.name)}</span>`).join('')
+        : '<span>Aucun OLYCITY Live connecté pour l\'instant</span>');
+      renderTargets();
+    }
+
+    function renderTargets() {
+      const online = onlineIds();
+      $('targets').innerHTML = `<button type="button" class="all" data-target="" aria-pressed="${!state.target}">Tout le monde</button>`
+        + state.members.map(m => `<button type="button" data-target="${escapeHtml(m.id)}" class="${online.has(m.id) ? 'on' : ''}" aria-pressed="${state.target === m.id}" title="${online.has(m.id) ? 'Connecté' : 'Hors ligne'}">${avatarHtml(m)}${escapeHtml(m.name)}</button>`).join('');
+    }
+
+    // ─── Média ───────────────────────────────────────────────────────────
+    function kindOf(file) {
+      if (file.type === 'image/gif') return 'gif';
+      if (file.type.startsWith('image/')) return 'image';
+      if (file.type.startsWith('video/')) return 'video';
+      return null;
+    }
+
+    async function setFile(file) {
+      if (!file) return;
+      const kind = kindOf(file);
+      if (!kind) { setStatus('Ce fichier n\'est ni une image, ni un GIF, ni une vidéo.', 'err'); return; }
+      if (state.fileUrl) URL.revokeObjectURL(state.fileUrl);
+      state.file = file;
+      state.kind = kind;
+      state.fileUrl = URL.createObjectURL(file);
+      state.natural = await naturalSize(state.fileUrl, kind);
+      const tag = kind === 'video'
+        ? `<video src="${state.fileUrl}" muted playsinline></video>`
+        : `<img src="${state.fileUrl}" alt="">`;
+      $('thumb').innerHTML = tag;
+      $('fileName').textContent = file.name || 'Image collée';
+      $('fileMeta').textContent = `${{ gif:'GIF', image:'Image', video:'Vidéo' }[kind]} · ${(file.size / 1024 / 1024).toFixed(1)} Mo`
+        + (file.size > MAX_UPLOAD && kind !== 'image' ? ' · trop lourd' : '');
+      $('fileCard').classList.add('show');
+      $('drop').hidden = true;
+      setStatus('');
+      fitCustomToMedia();
+      render();
+    }
+
+    function naturalSize(url, kind) {
+      return new Promise(resolve => {
+        if (kind === 'video') {
+          const video = document.createElement('video');
+          video.onloadedmetadata = () => resolve({ w: video.videoWidth || 16, h: video.videoHeight || 9 });
+          video.onerror = () => resolve({ w: 16, h: 9 });
+          video.src = url;
+        } else {
+          const image = new Image();
+          image.onload = () => resolve({ w: image.naturalWidth, h: image.naturalHeight });
+          image.onerror = () => resolve({ w: 16, h: 9 });
+          image.src = url;
+        }
+      });
+    }
+
+    function clearFile() {
+      if (state.fileUrl) URL.revokeObjectURL(state.fileUrl);
+      Object.assign(state, { file: null, fileUrl: '', kind: null, natural: null });
+      $('file').value = '';
+      $('fileCard').classList.remove('show');
+      $('drop').hidden = false;
+      render();
+    }
+
+    // Une photo de téléphone dépasse vite 10 Mo : on la réduit plutôt que de
+    // la refuser. Les GIF et vidéos ne peuvent pas l'être sans tout casser.
+    async function shrinkImage(file) {
+      if (state.kind !== 'image' || file.size <= MAX_UPLOAD) return file;
+      const bitmap = await createImageBitmap(file);
+      const scale = Math.min(1, 2560 / bitmap.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(bitmap.width * scale);
+      canvas.height = Math.round(bitmap.height * scale);
+      canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      for (const quality of [.9, .8, .65, .5]) {
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
+        if (blob && blob.size <= MAX_UPLOAD) return new File([blob], (file.name || 'image').replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
+      }
+      return file;
+    }
+
+    // ─── Aperçu ──────────────────────────────────────────────────────────
+    function layout() {
+      return state.size === 'custom' ? state.custom : PRESETS[state.size];
+    }
+
+    // Même calcul que la fenêtre native : le média garde ses proportions dans
+    // sa zone, le texte chevauche son bord.
+    function mediaRect() {
+      const box = layout();
+      if (!state.natural) return null;
+      const ratio = (state.natural.w / state.natural.h) * (9 / 16);
+      const w = Math.min(box.w, box.h * ratio);
+      const h = w / ratio;
+      return { left: box.cx - w / 2, top: box.cy - h / 2, w, h };
+    }
+
+    function fitCustomToMedia() {
+      if (!state.natural) return;
+      const ratio = (state.natural.w / state.natural.h) * (9 / 16);
+      // Le cadre épouse le média sans sortir de la zone de départ.
+      const c = state.custom;
+      const w = Math.min(c.w, c.h * ratio);
+      c.w = w;
+      c.h = w / ratio;
+      clampCustom();
+    }
+
+    function clampCustom() {
+      const c = state.custom;
+      c.w = Math.min(1, Math.max(.08, c.w));
+      c.h = Math.min(1, Math.max(.08, c.h));
+      c.cx = Math.min(1 - c.w / 2, Math.max(c.w / 2, c.cx));
+      c.cy = Math.min(1 - c.h / 2, Math.max(c.h / 2, c.cy));
+    }
+
+    function render() {
+      const screen = $('screen');
+      const W = screen.clientWidth, H = screen.clientHeight;
+      const text = $('text').value.trim();
+      const rect = mediaRect();
+      const box = layout();
+      const who = profile();
+      $('empty').hidden = Boolean(rect || text);
+
+      const boxEl = $('box');
+      boxEl.classList.toggle('custom', state.size === 'custom' && Boolean(rect));
+      boxEl.hidden = !rect;
+      if (rect) {
+        Object.assign(boxEl.style, { left: `${rect.left * 100}%`, top: `${rect.top * 100}%`, width: `${rect.w * 100}%`, height: `${rect.h * 100}%` });
+        const current = $('media').firstElementChild;
+        if (!current || current.dataset.src !== state.fileUrl) {
+          $('media').innerHTML = state.kind === 'video'
+            ? `<video data-src="${state.fileUrl}" src="${state.fileUrl}" autoplay loop muted playsinline></video>`
+            : `<img data-src="${state.fileUrl}" src="${state.fileUrl}" alt="">`;
+        }
+      } else $('media').innerHTML = '';
+
+      // Mêmes tailles que la fenêtre native, calculées pour un écran 1080p
+      // puis ramenées à la taille de l'aperçu.
+      const scale = W / 1920;
+      const fontPx = scale * (rect
+        ? Math.min(Math.max(rect.w * 1920 * .072, 20), 1080 * .06)
+        : Math.min(Math.max(box.w * 1920 * .085, 26), 1080 * .075));
+      const caption = $('caption');
+      caption.hidden = !text;
+      if (text) {
+        const width = rect ? Math.max(rect.w * 1.08, .18) : box.w;
+        caption.textContent = text;
+        Object.assign(caption.style, { fontSize: `${fontPx}px`, width: `${width * 100}%`, left: `${(rect ? rect.left + rect.w / 2 : box.cx) * 100}%` });
+        const height = caption.offsetHeight / H;
+        const top = !rect ? box.cy - height / 2
+          : state.textPos === 'haut' ? rect.top - height * .4 : rect.top + rect.h - height * .62;
+        caption.style.top = `${top * 100}%`;
+      }
+
+      const tag = $('tag');
+      tag.hidden = !(who && (rect || text));
+      if (!tag.hidden) {
+        const size = Math.min(Math.max(fontPx * .95, 26 * scale), 58 * scale);
+        tag.innerHTML = `${who.avatar ? `<img src="${escapeHtml(who.avatar)}" alt="" style="width:${size}px;height:${size}px">` : `<i style="width:${size}px;height:${size}px"></i>`}<span style="font-size:${size * .62}px">${escapeHtml(who.name)}</span>`;
+        const anchorTop = rect ? rect.top : parseFloat(caption.style.top) / 100;
+        const left = rect ? rect.left * W - size * .2 : box.cx * W - tag.offsetWidth / 2;
+        Object.assign(tag.style, {
+          left: `${Math.max(4 * scale, left)}px`,
+          top: `${Math.max(4 * scale, anchorTop * H - size * (rect ? .55 : 1.5))}px`,
+        });
+      }
+
+      $('customHint').hidden = state.size !== 'custom';
+      $('mediaHint').textContent = state.file ? '' : 'facultatif';
+    }
+
+    // ─── Perso : déplacer et redimensionner ──────────────────────────────
+    function dragHandler(onMove) {
+      return event => {
+        if (state.size !== 'custom') return;
+        event.preventDefault();
+        event.stopPropagation();
+        const screen = $('screen').getBoundingClientRect();
+        const start = { x: event.clientX, y: event.clientY, ...state.custom };
+        const move = e => { onMove(start, (e.clientX - start.x) / screen.width, (e.clientY - start.y) / screen.height); clampCustom(); render(); };
+        const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
+      };
+    }
+    $('box').addEventListener('pointerdown', dragHandler((s, dx, dy) => { state.custom.cx = s.cx + dx; state.custom.cy = s.cy + dy; }));
+    $('handle').addEventListener('pointerdown', dragHandler((s, dx) => {
+      const ratio = s.w / s.h;
+      const w = Math.min(1, Math.max(.08, s.w + dx * 2));
+      state.custom.w = w;
+      state.custom.h = w / ratio;
+    }));
+
+    // ─── Envoi ───────────────────────────────────────────────────────────
+    function setStatus(message, kind = '') {
+      $('status').textContent = message;
+      $('status').className = `status ${kind}`;
+    }
+
+    function upload(form) {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `${LIVECHAT_ENDPOINT}/send`);
+        xhr.upload.onprogress = e => { if (e.lengthComputable) $('bar').style.transform = `scaleX(${e.loaded / e.total})`; };
+        xhr.onload = () => {
+          let body = {};
+          try { body = JSON.parse(xhr.responseText); } catch { /* réponse vide */ }
+          if (xhr.status >= 200 && xhr.status < 300) resolve(body);
+          else reject(new Error(body.error || `Erreur ${xhr.status}`));
+        };
+        xhr.onerror = () => reject(new Error('Serveur livechat injoignable.'));
+        xhr.send(form);
+      });
+    }
+
+    $('form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const who = profile();
+      const text = $('text').value.trim();
+      if (!who) { setStatus('Choisis d\'abord ton profil.', 'err'); $('profile').focus(); return; }
+      if (!state.file && !text) { setStatus('Ajoute un média, un texte, ou les deux.', 'err'); return; }
+      $('send').disabled = true;
+      $('sendLabel').textContent = 'Envoi…';
+      $('bar').style.transform = 'scaleX(0)';
+      setStatus('');
+      try {
+        const form = new FormData();
+        if (state.file) {
+          const file = await shrinkImage(state.file);
+          if (file.size > MAX_UPLOAD) throw new Error('Fichier trop lourd : 10 Mo maximum.');
+          form.set('file', file, file.name || 'media');
+        }
+        const target = state.members.find(m => m.id === state.target);
+        form.set('text', text);
+        form.set('size', state.size);
+        if (state.size === 'custom') {
+          const r = mediaRect() || state.custom;
+          form.set('box', JSON.stringify({ cx: state.custom.cx, cy: state.custom.cy, w: r.w, h: r.h }));
+        }
+        form.set('textPos', state.textPos);
+        if (Number($('duration').value) > 0) form.set('durationMs', String(Number($('duration').value) * 1000));
+        if ($('muted').checked) form.set('muted', '1');
+        if (target) { form.set('target', target.id); form.set('targetName', target.name); }
+        form.set('fromName', who.name);
+        if (who.avatar) form.set('fromAvatar', who.avatar);
+        await upload(form);
+        const online = onlineIds();
+        setStatus(target
+          ? (online.has(target.id) ? `📺 Envoyé sur l'écran de ${target.name}.` : `Envoyé, mais l'OLYCITY Live de ${target.name} n'est pas connecté.`)
+          : (online.size ? `📺 Envoyé sur ${online.size} écran${online.size > 1 ? 's' : ''}.` : 'Envoyé, mais aucun écran n\'est connecté.'), 'ok');
+        $('text').value = '';
+        $('count').textContent = '0';
+        clearFile();
+      } catch (error) {
+        setStatus(error.message, 'err');
+      } finally {
+        $('send').disabled = false;
+        $('sendLabel').textContent = 'Envoyer à l\'écran';
+        $('bar').style.transform = 'scaleX(0)';
+      }
+    });
+
+    // ─── Événements ──────────────────────────────────────────────────────
+    $('file').addEventListener('change', () => setFile($('file').files[0]));
+    $('clearFile').addEventListener('click', clearFile);
+    $('drop').addEventListener('dragover', e => { e.preventDefault(); $('drop').classList.add('over'); });
+    $('drop').addEventListener('dragleave', () => $('drop').classList.remove('over'));
+    $('drop').addEventListener('drop', e => { e.preventDefault(); $('drop').classList.remove('over'); setFile(e.dataTransfer.files[0]); });
+    window.addEventListener('paste', e => {
+      const file = [...(e.clipboardData?.files || [])][0];
+      if (file) { e.preventDefault(); setFile(file); }
+    });
+    $('text').addEventListener('input', () => { $('count').textContent = $('text').value.length; render(); });
+    $('profile').addEventListener('change', () => {
+      try { localStorage.setItem(PROFILE_KEY, $('profile').value); } catch { /* navigation privée */ }
+      render();
+    });
+    $('targets').addEventListener('click', e => {
+      const button = e.target.closest('button');
+      if (!button) return;
+      state.target = button.dataset.target;
+      renderTargets();
+    });
+    $('sizes').addEventListener('click', e => {
+      const button = e.target.closest('button');
+      if (!button) return;
+      if (button.dataset.size === 'custom' && state.size !== 'custom') {
+        state.custom = { ...PRESETS[state.size] };
+        fitCustomToMedia();
+      }
+      state.size = button.dataset.size;
+      $('sizes').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b === button)));
+      render();
+    });
+    $('textPos').addEventListener('click', e => {
+      const button = e.target.closest('button');
+      if (!button) return;
+      state.textPos = button.dataset.pos;
+      $('textPos').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b === button)));
+      render();
+    });
+    $('duration').addEventListener('input', () => {
+      const value = Number($('duration').value);
+      $('durationLabel').textContent = value ? `${value} s` : 'auto';
+    });
+    new ResizeObserver(render).observe($('screen'));
+
+    loadMembers().then(loadReceivers);
+    setInterval(loadReceivers, 20000);
+  </script>
+</body>
+</html>
