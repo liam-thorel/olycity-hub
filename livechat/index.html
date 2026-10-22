@@ -61,6 +61,16 @@
     .file div { flex:1; min-width:0; font-size:13px; }
     .file div span { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .file div small { color:var(--muted); }
+    .account { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; }
+    .account .hint { flex-basis:100%; }
+    .account .hint.err { color:var(--red); }
+    .me { display:flex; align-items:center; gap:10px; min-width:0; }
+    .me img, .me i { width:40px; height:40px; border-radius:50%; object-fit:cover; background:var(--surf3); box-shadow:0 0 0 2px var(--red); }
+    .me span { display:flex; flex-direction:column; line-height:1.25; }
+    .me small { color:var(--muted); font-size:12px; }
+    .discord { display:inline-flex; align-items:center; justify-content:center; gap:10px; width:100%; height:44px; border:0; border-radius:8px; background:#5865f2; color:#fff; font-weight:700; cursor:pointer; transition:filter .2s; }
+    .discord:hover { filter:brightness(1.1); }
+    .discord svg { width:22px; height:22px; }
     .ghost { border:1px solid var(--border2); background:transparent; border-radius:8px; padding:6px 10px; cursor:pointer; color:var(--muted); }
     .ghost:hover { color:var(--text); border-color:var(--text); }
 
@@ -126,8 +136,8 @@
     <div class="layout">
       <form class="panel" id="form" novalidate>
         <div class="field">
-          <label class="label" for="profile">Qui envoie ?</label>
-          <select id="profile" required><option value="">Chargement du roster…</option></select>
+          <span class="label">Ton compte</span>
+          <div class="account" id="account"><span class="hint">Vérification…</span></div>
         </div>
 
         <div class="field">
@@ -135,8 +145,8 @@
           <label class="drop" id="drop">
             <strong>Dépose une image, un GIF ou une vidéo</strong>
             <span>ou clique, ou colle avec Ctrl+V</span>
-            <small id="limit">10 Mo maximum · les photos trop lourdes sont réduites automatiquement</small>
-            <input type="file" id="file" accept="image/*,video/mp4,video/webm,video/quicktime">
+            <small id="limit">PNG, JPEG, WebP, GIF, MP4, WebM ou MOV · 500 Mo maximum</small>
+            <input type="file" id="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp,video/mp4,video/webm,video/quicktime">
           </label>
           <div class="file" id="fileCard">
             <span id="thumb"></span>
@@ -207,9 +217,14 @@
     const LIVECHAT_ENDPOINT = 'https://olycity-livechat.olycity.workers.dev';
     const FIREBASE = 'https://realtime-database-5bb9f-default-rtdb.europe-west1.firebasedatabase.app';
     const MEMBERS_URL = 'https://tracker.olycity.fr/data/members.json';
-    const MAX_UPLOAD = 10 * 1024 * 1024;
+    const MAX_UPLOAD = 500 * 1024 * 1024;
     const RECEIVER_FRESH_MS = 5 * 60 * 1000;
-    const PROFILE_KEY = 'olycity-livechat-profile';
+    // Application Discord OLYBOT : sa page OAuth2 doit lister cette adresse
+    // (https://olycity.fr/livechat/) parmi les redirections autorisées.
+    const DISCORD_CLIENT_ID = '1281505908224168027';
+    const TOKEN_KEY = 'olycity-livechat-discord';
+    const STATE_KEY = 'olycity-livechat-oauth-state';
+    const TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/bmp', 'video/mp4', 'video/webm', 'video/quicktime'];
     // Mêmes zones que l'affichage réel (OLYVALO/live/livechat-utils.js).
     const PRESETS = {
       grand: { cx:.5, cy:.47, w:.72, h:.8 },
@@ -219,13 +234,13 @@
 
     const $ = id => document.getElementById(id);
     const state = {
-      members: [], receivers: {}, file: null, fileUrl: '', kind: null, natural: null,
+      members: [], receivers: {}, me: null, file: null, fileUrl: '', kind: null, natural: null,
       size: 'moyen', custom: { cx:.5, cy:.45, w:.4, h:.4 }, textPos: 'bas', target: '',
     };
 
     const escapeHtml = value => String(value).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
     const avatarHtml = member => member?.avatar ? `<img src="${escapeHtml(member.avatar)}" alt="" loading="lazy">` : '<i></i>';
-    const profile = () => state.members.find(member => member.id === $('profile').value) || null;
+    const profile = () => state.me;
     const onlineIds = () => new Set(Object.entries(state.receivers)
       .filter(([, r]) => r && r.enabled !== false && Date.now() - Number(r.ts || 0) <= RECEIVER_FRESH_MS)
       .map(([id]) => id));
@@ -239,13 +254,94 @@
       const members = new Map((Array.isArray(list) ? list : []).map(m => [m.id, { id: m.id, name: m.name, avatar: m.avatar || null }]));
       Object.entries(overlay || {}).forEach(([id, m]) => { if (!members.has(id) && m?.name) members.set(id, { id, name: m.name, avatar: m.avatar || null }); });
       state.members = [...members.values()].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
-      let saved = '';
-      try { saved = localStorage.getItem(PROFILE_KEY) || ''; } catch { /* navigation privée */ }
-      $('profile').innerHTML = '<option value="">Choisis ton profil</option>'
-        + state.members.map(m => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)}</option>`).join('');
-      if (state.members.some(m => m.id === saved)) $('profile').value = saved;
       renderTargets();
       render();
+    }
+
+    // ─── Connexion Discord ───────────────────────────────────────────────
+    // Flux OAuth2 « implicite » : le jeton revient dans l'adresse, sans
+    // serveur. C'est le Worker qui le vérifie auprès de Discord et retrouve le
+    // membre du roster : la page ne fait qu'afficher ce qu'il répond.
+    const redirectUri = () => `${location.origin}${location.pathname}`;
+    const storage = {
+      get(key) { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; } },
+      set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* navigation privée */ } },
+      drop(key) { try { localStorage.removeItem(key); } catch { /* navigation privée */ } },
+    };
+
+    function token() {
+      const saved = storage.get(TOKEN_KEY);
+      return saved && saved.expiresAt > Date.now() ? saved.token : null;
+    }
+
+    function login() {
+      const nonce = crypto.randomUUID();
+      storage.set(STATE_KEY, nonce);
+      const url = new URL('https://discord.com/oauth2/authorize');
+      url.search = new URLSearchParams({
+        client_id: DISCORD_CLIENT_ID, response_type: 'token', scope: 'identify',
+        redirect_uri: redirectUri(), state: nonce, prompt: 'none',
+      });
+      location.assign(url);
+    }
+
+    function logout() {
+      storage.drop(TOKEN_KEY);
+      state.me = null;
+      renderAccount();
+      render();
+    }
+
+    function readOAuthReturn() {
+      if (!location.hash.includes('access_token=') && !location.hash.includes('error=')) return;
+      const params = new URLSearchParams(location.hash.slice(1));
+      history.replaceState(null, '', redirectUri());
+      const expected = storage.get(STATE_KEY);
+      storage.drop(STATE_KEY);
+      if (params.get('error')) { setStatus('Connexion Discord annulée.', 'err'); return; }
+      if (!expected || params.get('state') !== expected) { setStatus('Connexion Discord refusée (état invalide), réessaie.', 'err'); return; }
+      storage.set(TOKEN_KEY, {
+        token: params.get('access_token'),
+        expiresAt: Date.now() + Number(params.get('expires_in') || 3600) * 1000 - 60000,
+      });
+    }
+
+    async function api(path, options = {}) {
+      const res = await fetch(`${LIVECHAT_ENDPOINT}${path}`, {
+        ...options,
+        headers: { ...(options.headers || {}), Authorization: `Bearer ${token()}` },
+      }).catch(() => null);
+      if (!res) throw new Error('Serveur livechat injoignable.');
+      const body = await res.json().catch(() => ({}));
+      if (res.status === 401) { storage.drop(TOKEN_KEY); state.me = null; renderAccount(); }
+      if (!res.ok) throw Object.assign(new Error(body.error || `Erreur ${res.status}`), { status: res.status });
+      return body;
+    }
+
+    async function loadAccount() {
+      if (!token()) { renderAccount(); return; }
+      try {
+        state.me = (await api('/me')).member;
+        renderAccount();
+      } catch (error) {
+        renderAccount(error.message);
+      }
+      render();
+    }
+
+    function renderAccount(problem = '') {
+      const box = $('account');
+      if (state.me) {
+        box.innerHTML = `<div class="me">${avatarHtml(state.me)}<span><strong>${escapeHtml(state.me.name)}</strong><small>connecté avec Discord</small></span></div>
+          <button type="button" class="ghost" id="logout">Se déconnecter</button>`;
+        $('logout').addEventListener('click', logout);
+        return;
+      }
+      box.innerHTML = `<button type="button" class="discord" id="login">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.3 4.4A19.6 19.6 0 0 0 15.4 3l-.6 1.3a18 18 0 0 0-5.6 0L8.6 3a19.5 19.5 0 0 0-4.9 1.4C.6 9 0 13.6.3 18.1a19.8 19.8 0 0 0 6 3l1.3-2a12.7 12.7 0 0 1-2-1l.5-.4a14 14 0 0 0 11.9 0l.5.4-2 1 1.3 2a19.7 19.7 0 0 0 6-3c.5-5.2-.8-9.7-3.5-13.7ZM8.7 15.3c-1.2 0-2.1-1.1-2.1-2.4s.9-2.4 2.1-2.4 2.2 1.1 2.1 2.4c0 1.3-.9 2.4-2.1 2.4Zm6.6 0c-1.2 0-2.1-1.1-2.1-2.4s.9-2.4 2.1-2.4 2.2 1.1 2.1 2.4c0 1.3-.9 2.4-2.1 2.4Z"/></svg>
+          Se connecter avec Discord</button>
+        ${problem ? `<span class="hint err">${escapeHtml(problem)}</span>` : '<span class="hint">Seuls les membres du roster OLYCITY peuvent envoyer.</span>'}`;
+      $('login').addEventListener('click', login);
     }
 
     async function loadReceivers() {
@@ -268,6 +364,7 @@
 
     // ─── Média ───────────────────────────────────────────────────────────
     function kindOf(file) {
+      if (!TYPES.includes(file.type)) return null;
       if (file.type === 'image/gif') return 'gif';
       if (file.type.startsWith('image/')) return 'image';
       if (file.type.startsWith('video/')) return 'video';
@@ -277,7 +374,7 @@
     async function setFile(file) {
       if (!file) return;
       const kind = kindOf(file);
-      if (!kind) { setStatus('Ce fichier n\'est ni une image, ni un GIF, ni une vidéo.', 'err'); return; }
+      if (!kind) { setStatus('Format non pris en charge : PNG, JPEG, WebP, GIF, MP4, WebM ou MOV.', 'err'); return; }
       if (state.fileUrl) URL.revokeObjectURL(state.fileUrl);
       state.file = file;
       state.kind = kind;
@@ -289,7 +386,7 @@
       $('thumb').innerHTML = tag;
       $('fileName').textContent = file.name || 'Image collée';
       $('fileMeta').textContent = `${{ gif:'GIF', image:'Image', video:'Vidéo' }[kind]} · ${(file.size / 1024 / 1024).toFixed(1)} Mo`
-        + (file.size > MAX_UPLOAD && kind !== 'image' ? ' · trop lourd' : '');
+        + (file.size > MAX_UPLOAD ? ' · trop lourd (500 Mo max)' : '');
       $('fileCard').classList.add('show');
       $('drop').hidden = true;
       setStatus('');
@@ -320,23 +417,6 @@
       $('fileCard').classList.remove('show');
       $('drop').hidden = false;
       render();
-    }
-
-    // Une photo de téléphone dépasse vite 10 Mo : on la réduit plutôt que de
-    // la refuser. Les GIF et vidéos ne peuvent pas l'être sans tout casser.
-    async function shrinkImage(file) {
-      if (state.kind !== 'image' || file.size <= MAX_UPLOAD) return file;
-      const bitmap = await createImageBitmap(file);
-      const scale = Math.min(1, 2560 / bitmap.width);
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.round(bitmap.width * scale);
-      canvas.height = Math.round(bitmap.height * scale);
-      canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-      for (const quality of [.9, .8, .65, .5]) {
-        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
-        if (blob && blob.size <= MAX_UPLOAD) return new File([blob], (file.name || 'image').replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
-      }
-      return file;
     }
 
     // ─── Aperçu ──────────────────────────────────────────────────────────
@@ -459,53 +539,77 @@
       $('status').className = `status ${kind}`;
     }
 
-    function upload(form) {
+    // Un morceau, avec sa progression : XMLHttpRequest, fetch ne la donne pas.
+    function sendPart(path, blob, onProgress) {
       return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.open('POST', `${LIVECHAT_ENDPOINT}/send`);
-        xhr.upload.onprogress = e => { if (e.lengthComputable) $('bar').style.transform = `scaleX(${e.loaded / e.total})`; };
+        xhr.open('PUT', `${LIVECHAT_ENDPOINT}${path}`);
+        xhr.setRequestHeader('Authorization', `Bearer ${token()}`);
+        xhr.upload.onprogress = e => { if (e.lengthComputable) onProgress(e.loaded); };
         xhr.onload = () => {
           let body = {};
           try { body = JSON.parse(xhr.responseText); } catch { /* réponse vide */ }
           if (xhr.status >= 200 && xhr.status < 300) resolve(body);
           else reject(new Error(body.error || `Erreur ${xhr.status}`));
         };
-        xhr.onerror = () => reject(new Error('Serveur livechat injoignable.'));
-        xhr.send(form);
+        xhr.onerror = () => reject(new Error('Envoi interrompu, vérifie ta connexion.'));
+        xhr.send(blob);
       });
+    }
+
+    // Les Workers gratuits refusent les requêtes de plus de 100 Mo : le
+    // fichier part en morceaux, réassemblés dans R2.
+    async function uploadFile(file) {
+      const plan = await api('/upload/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: file.type, size: file.size }),
+      });
+      const parts = [];
+      for (let index = 0; index < plan.parts; index += 1) {
+        const start = index * plan.partSize;
+        const chunk = file.slice(start, Math.min(file.size, start + plan.partSize));
+        const query = new URLSearchParams({ key: plan.key, uploadId: plan.uploadId, part: String(index + 1) });
+        parts.push(await sendPart(`/upload/part?${query}`, chunk, loaded => {
+          $('bar').style.transform = `scaleX(${(start + loaded) / file.size})`;
+          $('sendLabel').textContent = `Envoi… ${Math.round(((start + loaded) / file.size) * 100)} %`;
+        }));
+      }
+      await api('/upload/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: plan.key, uploadId: plan.uploadId, parts }),
+      });
+      return plan.key;
     }
 
     $('form').addEventListener('submit', async event => {
       event.preventDefault();
-      const who = profile();
       const text = $('text').value.trim();
-      if (!who) { setStatus('Choisis d\'abord ton profil.', 'err'); $('profile').focus(); return; }
+      if (!state.me || !token()) { setStatus('Connecte-toi d\'abord avec Discord.', 'err'); return; }
       if (!state.file && !text) { setStatus('Ajoute un média, un texte, ou les deux.', 'err'); return; }
+      if (state.file && state.file.size > MAX_UPLOAD) { setStatus('Fichier trop lourd : 500 Mo maximum.', 'err'); return; }
       $('send').disabled = true;
       $('sendLabel').textContent = 'Envoi…';
       $('bar').style.transform = 'scaleX(0)';
       setStatus('');
       try {
-        const form = new FormData();
-        if (state.file) {
-          const file = await shrinkImage(state.file);
-          if (file.size > MAX_UPLOAD) throw new Error('Fichier trop lourd : 10 Mo maximum.');
-          form.set('file', file, file.name || 'media');
-        }
         const target = state.members.find(m => m.id === state.target);
-        form.set('text', text);
-        form.set('size', state.size);
+        const payload = {
+          text,
+          size: state.size,
+          textPos: state.textPos,
+          mediaKey: state.file ? await uploadFile(state.file) : null,
+        };
         if (state.size === 'custom') {
           const r = mediaRect() || state.custom;
-          form.set('box', JSON.stringify({ cx: state.custom.cx, cy: state.custom.cy, w: r.w, h: r.h }));
+          payload.box = { cx: state.custom.cx, cy: state.custom.cy, w: r.w, h: r.h };
         }
-        form.set('textPos', state.textPos);
-        if (Number($('duration').value) > 0) form.set('durationMs', String(Number($('duration').value) * 1000));
-        if ($('muted').checked) form.set('muted', '1');
-        if (target) { form.set('target', target.id); form.set('targetName', target.name); }
-        form.set('fromName', who.name);
-        if (who.avatar) form.set('fromAvatar', who.avatar);
-        await upload(form);
+        if (Number($('duration').value) > 0) payload.durationMs = Number($('duration').value) * 1000;
+        if ($('muted').checked) payload.muted = true;
+        if (target) Object.assign(payload, { target: target.id, targetName: target.name });
+        $('sendLabel').textContent = 'Affichage…';
+        await api('/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         const online = onlineIds();
         setStatus(target
           ? (online.has(target.id) ? `📺 Envoyé sur l'écran de ${target.name}.` : `Envoyé, mais l'OLYCITY Live de ${target.name} n'est pas connecté.`)
@@ -533,10 +637,6 @@
       if (file) { e.preventDefault(); setFile(file); }
     });
     $('text').addEventListener('input', () => { $('count').textContent = $('text').value.length; render(); });
-    $('profile').addEventListener('change', () => {
-      try { localStorage.setItem(PROFILE_KEY, $('profile').value); } catch { /* navigation privée */ }
-      render();
-    });
     $('targets').addEventListener('click', e => {
       const button = e.target.closest('button');
       if (!button) return;
@@ -567,6 +667,8 @@
     });
     new ResizeObserver(render).observe($('screen'));
 
+    readOAuthReturn();
+    loadAccount();
     loadMembers().then(loadReceivers);
     setInterval(loadReceivers, 20000);
   </script>
