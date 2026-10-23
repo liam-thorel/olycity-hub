@@ -105,8 +105,22 @@
     .screen::before { content:''; position:absolute; inset:0; background:repeating-linear-gradient(0deg, transparent 0 3px, rgba(255,255,255,.015) 3px 4px), radial-gradient(circle at 50% 120%, rgba(0,0,0,.6), transparent 60%); }
     .hud { position:absolute; left:50%; bottom:2%; transform:translateX(-50%); width:34%; height:9%; border-radius:6px; background:rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.06); }
     .minimap { position:absolute; right:1.5%; bottom:2%; width:15%; aspect-ratio:1; border-radius:4px; background:rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.06); }
-    .box { position:absolute; }
-    .box.custom { cursor:move; outline:1.5px dashed rgba(255,255,255,.55); outline-offset:3px; }
+    .box { position:absolute; cursor:grab; touch-action:none; }
+    .box:active { cursor:grabbing; }
+    .box:focus-visible { outline:2px solid var(--gold); outline-offset:3px; }
+    .box.text-only { z-index:2; }
+    /* Grille calée sur l'écran : 16 × 9 cases, subdivisées en 32 × 18, et les
+       deux axes du centre. C'est elle qui sert d'aimant pendant le placement. */
+    .gridlines { position:absolute; inset:0; pointer-events:none; opacity:0; transition:opacity .2s;
+      background-image:linear-gradient(to right, rgba(255,255,255,.16) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,.16) 1px, transparent 1px),
+                       linear-gradient(to right, rgba(255,255,255,.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,.06) 1px, transparent 1px);
+      background-size:calc(100% / 16) calc(100% / 9), calc(100% / 16) calc(100% / 9), calc(100% / 32) calc(100% / 18), calc(100% / 32) calc(100% / 18); }
+    .gridlines::before, .gridlines::after { content:''; position:absolute; background:rgba(245,200,66,.45); }
+    .gridlines::before { left:50%; top:0; bottom:0; width:1px; }
+    .gridlines::after { top:50%; left:0; right:0; height:1px; }
+    .screen.free .gridlines { opacity:1; }
+    .tools { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; }
+    .tools .readout { margin-left:auto; font:600 12px 'Tomorrow', sans-serif; letter-spacing:.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
     .media { position:absolute; inset:0; border-radius:1.6cqw; overflow:hidden; background:rgba(0,0,0,.25); }
     .media img, .media video { width:100%; height:100%; object-fit:fill; display:block; }
     .caption, .tag span { font-family:'Arial Black', 'Segoe UI Black', system-ui, sans-serif; font-weight:900; color:#fff; -webkit-text-stroke:.34em #000; paint-order:stroke fill; line-height:1.15; }
@@ -114,8 +128,16 @@
     .tag { position:absolute; display:flex; align-items:center; gap:.4em; white-space:nowrap; }
     .tag img, .tag i { border-radius:50%; border:.09em solid var(--red); object-fit:cover; background:#1b1f2a; }
     .tag span { text-transform:uppercase; }
-    .handle { position:absolute; right:-9px; bottom:-9px; width:18px; height:18px; border-radius:50%; background:#fff; border:3px solid var(--red); cursor:nwse-resize; display:none; }
-    .box.custom .handle { display:block; }
+    /* La légende et le nom débordent sur le cadre : ils laissent passer les
+       clics, et les poignées vivent dans un calque au-dessus de tout. */
+    .caption, .tag { pointer-events:none; }
+    .frame { position:absolute; z-index:3; pointer-events:none; display:none; outline:1.5px dashed rgba(255,255,255,.7); outline-offset:3px; }
+    .frame.on { display:block; }
+    .handle { position:absolute; width:16px; height:16px; border-radius:50%; background:#fff; border:3px solid var(--red); touch-action:none; pointer-events:auto; }
+    .handle[data-corner=nw] { left:-9px; top:-9px; cursor:nwse-resize; }
+    .handle[data-corner=ne] { right:-9px; top:-9px; cursor:nesw-resize; }
+    .handle[data-corner=sw] { left:-9px; bottom:-9px; cursor:nesw-resize; }
+    .handle[data-corner=se] { right:-9px; bottom:-9px; cursor:nwse-resize; }
     .hint { font-size:13px; color:var(--dim); }
     .empty { position:absolute; inset:0; display:grid; place-items:center; color:rgba(255,255,255,.35); font-size:14px; }
 
@@ -171,9 +193,9 @@
             <button type="button" data-size="grand">Grand</button>
             <button type="button" data-size="moyen" aria-pressed="true">Moyen</button>
             <button type="button" data-size="petit">Petit</button>
-            <button type="button" data-size="custom">Perso</button>
+            <button type="button" data-size="custom">Libre</button>
           </div>
-          <span class="hint" id="customHint" hidden>Déplace le cadre dans l'aperçu, la poignée blanche change sa taille.</span>
+          <span class="hint" id="customHint">Glisse le média dans l'aperçu pour le placer librement. Coins ou molette pour l'agrandir ou le rapetisser.</span>
         </div>
 
         <div class="row">
@@ -199,13 +221,23 @@
       <section class="stage" aria-label="Aperçu">
         <div class="screen" id="screen">
           <div class="hud"></div><div class="minimap"></div>
-          <div class="box" id="box">
+          <div class="gridlines" aria-hidden="true"></div>
+          <div class="box" id="box" tabindex="0" role="group" aria-label="Média à l'écran : glisser pour déplacer, flèches pour déplacer, + et − pour la taille">
             <div class="media" id="media"></div>
-            <div class="handle" id="handle"></div>
           </div>
           <div class="caption" id="caption"></div>
           <div class="tag" id="tag"></div>
+          <div class="frame" id="frame">
+            <div class="handle" data-corner="nw"></div><div class="handle" data-corner="ne"></div>
+            <div class="handle" data-corner="sw"></div><div class="handle" data-corner="se"></div>
+          </div>
           <div class="empty" id="empty">L'aperçu de l'écran des joueurs apparaît ici</div>
+        </div>
+        <div class="tools">
+          <label class="toggle"><input type="checkbox" id="snap" checked> Aimanter à la grille</label>
+          <button type="button" class="ghost" id="center">Centrer</button>
+          <button type="button" class="ghost" id="fill">Plein écran</button>
+          <span class="readout" id="readout"></span>
         </div>
         <span class="hint">Aperçu à l'échelle d'un écran 16:9. Posté aussi dans le salon #livechat du Discord. Chacun peut couper l'affichage chez lui avec LIVECHAT.bat, et passer un média avec Ctrl+Maj+F9.</span>
       </section>
@@ -223,6 +255,10 @@
     // (https://olycity.fr/livechat/) parmi les redirections autorisées.
     const DISCORD_CLIENT_ID = '1281505908224168027';
     const TOKEN_KEY = 'olycity-livechat-discord';
+    // Grille d'aimantation : 32 × 18 cases, soit 60 px sur un écran 1080p.
+    const GRID_X = 32;
+    const GRID_Y = 18;
+    const MIN_W = .05;
     const STATE_KEY = 'olycity-livechat-oauth-state';
     const TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/bmp', 'video/mp4', 'video/webm', 'video/quicktime'];
     // Mêmes zones que l'affichage réel (OLYVALO/live/livechat-utils.js).
@@ -446,12 +482,34 @@
       clampCustom();
     }
 
+    // Proportions du média dans le repère de l'écran (largeur / hauteur, en
+    // fractions d'écran) : nulles pour un texte seul, qui n'en a pas.
+    function mediaRatio() {
+      return state.natural ? (state.natural.w / state.natural.h) * (9 / 16) : null;
+    }
+
     function clampCustom() {
       const c = state.custom;
-      c.w = Math.min(1, Math.max(.08, c.w));
-      c.h = Math.min(1, Math.max(.08, c.h));
+      const ratio = mediaRatio();
+      c.w = Math.min(1, Math.max(MIN_W, c.w));
+      if (ratio) {
+        c.h = c.w / ratio;
+        if (c.h > 1) { c.h = 1; c.w = ratio; }
+      } else {
+        c.h = Math.min(1, Math.max(.04, c.h));
+      }
       c.cx = Math.min(1 - c.w / 2, Math.max(c.w / 2, c.cx));
       c.cy = Math.min(1 - c.h / 2, Math.max(c.h / 2, c.cy));
+    }
+
+    // Cadre manipulable : le média, ou le bloc de texte quand il est seul.
+    function frameRect() {
+      const rect = mediaRect();
+      if (rect) return rect;
+      if (!$('text').value.trim()) return null;
+      const box = layout();
+      const h = state.textH || .12;
+      return { left: box.cx - box.w / 2, top: box.cy - h / 2, w: box.w, h };
     }
 
     function render() {
@@ -462,12 +520,10 @@
       const box = layout();
       const who = profile();
       $('empty').hidden = Boolean(rect || text);
+      screen.classList.toggle('free', state.size === 'custom' && Boolean(rect || text));
 
       const boxEl = $('box');
-      boxEl.classList.toggle('custom', state.size === 'custom' && Boolean(rect));
-      boxEl.hidden = !rect;
       if (rect) {
-        Object.assign(boxEl.style, { left: `${rect.left * 100}%`, top: `${rect.top * 100}%`, width: `${rect.w * 100}%`, height: `${rect.h * 100}%` });
         const current = $('media').firstElementChild;
         if (!current || current.dataset.src !== state.fileUrl) {
           $('media').innerHTML = state.kind === 'video'
@@ -489,10 +545,25 @@
         caption.textContent = text;
         Object.assign(caption.style, { fontSize: `${fontPx}px`, width: `${width * 100}%`, left: `${(rect ? rect.left + rect.w / 2 : box.cx) * 100}%` });
         const height = caption.offsetHeight / H;
+        if (!rect) state.textH = height;
         const top = !rect ? box.cy - height / 2
           : state.textPos === 'haut' ? rect.top - height * .4 : rect.top + rect.h - height * .62;
         caption.style.top = `${top * 100}%`;
       }
+
+      // Le cadre suit le média, ou le texte quand il est seul.
+      const frame = frameRect();
+      boxEl.hidden = !frame;
+      boxEl.classList.toggle('text-only', Boolean(frame) && !rect);
+      $('frame').classList.toggle('on', state.size === 'custom' && Boolean(frame));
+      if (frame) {
+        const position = { left: `${frame.left * 100}%`, top: `${frame.top * 100}%`, width: `${frame.w * 100}%`, height: `${frame.h * 100}%` };
+        Object.assign(boxEl.style, position);
+        Object.assign($('frame').style, position);
+      }
+      const pct = value => `${Math.round(value * 100)} %`;
+      $('readout').textContent = !frame ? ''
+        : `${{ grand: 'Grand', moyen: 'Moyen', petit: 'Petit', custom: 'Libre' }[state.size]} · X ${pct(frame.left + frame.w / 2)} · Y ${pct(frame.top + frame.h / 2)} · ${pct(frame.w)} de large`;
 
       const tag = $('tag');
       tag.hidden = !(who && (rect || text));
@@ -507,31 +578,144 @@
         });
       }
 
-      $('customHint').hidden = state.size !== 'custom';
       $('mediaHint').textContent = state.file ? '' : 'facultatif';
     }
 
-    // ─── Perso : déplacer et redimensionner ──────────────────────────────
-    function dragHandler(onMove) {
-      return event => {
-        if (state.size !== 'custom') return;
-        event.preventDefault();
-        event.stopPropagation();
-        const screen = $('screen').getBoundingClientRect();
-        const start = { x: event.clientX, y: event.clientY, ...state.custom };
-        const move = e => { onMove(start, (e.clientX - start.x) / screen.width, (e.clientY - start.y) / screen.height); clampCustom(); render(); };
-        const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
-        window.addEventListener('pointermove', move);
-        window.addEventListener('pointerup', up);
+    // ─── Placement libre ─────────────────────────────────────────────────
+    // N'importe quel format devient « Libre » dès qu'on touche au cadre : on
+    // part de là où il est, et on le pose où on veut, à la taille qu'on veut.
+    function enterFree() {
+      if (state.size === 'custom') return;
+      const frame = frameRect();
+      if (frame) state.custom = { cx: frame.left + frame.w / 2, cy: frame.top + frame.h / 2, w: frame.w, h: frame.h };
+      setSize('custom');
+    }
+
+    function setSize(size) {
+      state.size = size;
+      $('sizes').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.size === size)));
+    }
+
+    // Aimant : ramène sur la ligne de grille la plus proche (Alt pour s'en passer).
+    const snapping = event => $('snap').checked && !event?.altKey;
+    const snapTo = (value, cells) => Math.round(value * cells) / cells;
+
+    // Pour un déplacement, c'est le bord ou le centre le plus proche d'une
+    // ligne qui s'y colle.
+    function snapEdges(start, size, cells) {
+      let best = 0;
+      [start, start + size / 2, start + size].forEach((edge, index) => {
+        const delta = snapTo(edge, cells) - edge;
+        if (index === 0 || Math.abs(delta) < Math.abs(best)) best = delta;
+      });
+      return start + best;
+    }
+
+    function pointerOnScreen(event) {
+      const screen = $('screen').getBoundingClientRect();
+      return {
+        x: Math.min(1, Math.max(0, (event.clientX - screen.left) / screen.width)),
+        y: Math.min(1, Math.max(0, (event.clientY - screen.top) / screen.height)),
       };
     }
-    $('box').addEventListener('pointerdown', dragHandler((s, dx, dy) => { state.custom.cx = s.cx + dx; state.custom.cy = s.cy + dy; }));
-    $('handle').addEventListener('pointerdown', dragHandler((s, dx) => {
-      const ratio = s.w / s.h;
-      const w = Math.min(1, Math.max(.08, s.w + dx * 2));
-      state.custom.w = w;
-      state.custom.h = w / ratio;
+
+    function track(event, onMove) {
+      event.preventDefault();
+      event.stopPropagation();
+      enterFree();
+      const start = { pointer: pointerOnScreen(event), frame: frameRect() };
+      if (!start.frame) return;
+      const move = e => { onMove(start, pointerOnScreen(e), e); clampCustom(); render(); };
+      const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+    }
+
+    $('box').addEventListener('pointerdown', event => {
+      $('box').focus({ preventScroll: true });
+      track(event, (start, p, e) => {
+        const f = start.frame;
+        let left = f.left + p.x - start.pointer.x;
+        let top = f.top + p.y - start.pointer.y;
+        if (snapping(e)) { left = snapEdges(left, f.w, GRID_X); top = snapEdges(top, f.h, GRID_Y); }
+        state.custom.cx = left + f.w / 2;
+        state.custom.cy = top + f.h / 2;
+      });
+    });
+
+    // Un coin s'étire, le coin opposé reste en place ; le média garde ses
+    // proportions, un texte seul ne change que de largeur.
+    $('frame').querySelectorAll('.handle').forEach(handle => handle.addEventListener('pointerdown', event => {
+      const corner = handle.dataset.corner;
+      track(event, (start, p, e) => {
+        const f = start.frame;
+        const east = corner.includes('e');
+        const south = corner.includes('s');
+        const anchor = { x: east ? f.left : f.left + f.w, y: south ? f.top : f.top + f.h };
+        const x = snapping(e) ? snapTo(p.x, GRID_X) : p.x;
+        const y = snapping(e) ? snapTo(p.y, GRID_Y) : p.y;
+        const ratio = mediaRatio();
+        const roomW = east ? 1 - anchor.x : anchor.x;
+        const roomH = south ? 1 - anchor.y : anchor.y;
+        let w = Math.abs(x - anchor.x);
+        let h;
+        if (ratio) {
+          w = Math.min(Math.max(w, Math.abs(y - anchor.y) * ratio, MIN_W), roomW, roomH * ratio);
+          h = w / ratio;
+          state.custom.cy = south ? anchor.y + h / 2 : anchor.y - h / 2;
+        } else {
+          w = Math.min(Math.max(w, MIN_W), roomW);
+          h = f.h;
+        }
+        state.custom.w = w;
+        state.custom.h = h;
+        state.custom.cx = east ? anchor.x + w / 2 : anchor.x - w / 2;
+      });
     }));
+
+    function scaleFrame(factor) {
+      enterFree();
+      const c = state.custom;
+      c.w *= factor;
+      if (!mediaRatio()) c.h = state.textH || c.h;
+      clampCustom();
+      render();
+    }
+
+    $('box').addEventListener('wheel', event => {
+      event.preventDefault();
+      scaleFrame(event.deltaY < 0 ? 1.08 : 1 / 1.08);
+    }, { passive: false });
+
+    $('box').addEventListener('keydown', event => {
+      const step = event.shiftKey ? 1 / 8 : 1 / GRID_X;
+      const moves = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step * 16 / 9], ArrowDown: [0, step * 16 / 9] };
+      if (moves[event.key]) {
+        event.preventDefault();
+        enterFree();
+        state.custom.cx += moves[event.key][0];
+        state.custom.cy += moves[event.key][1];
+        clampCustom();
+        render();
+      } else if (event.key === '+' || event.key === '=') { event.preventDefault(); scaleFrame(1.08); }
+      else if (event.key === '-') { event.preventDefault(); scaleFrame(1 / 1.08); }
+    });
+
+    $('center').addEventListener('click', () => {
+      enterFree();
+      Object.assign(state.custom, { cx: .5, cy: .5 });
+      clampCustom();
+      render();
+    });
+
+    $('fill').addEventListener('click', () => {
+      enterFree();
+      const ratio = mediaRatio();
+      const w = ratio ? Math.min(1, ratio) : 1;
+      Object.assign(state.custom, { cx: .5, cy: .5, w, h: ratio ? w / ratio : state.textH || .12 });
+      clampCustom();
+      render();
+    });
 
     // ─── Envoi ───────────────────────────────────────────────────────────
     function setStatus(message, kind = '') {
@@ -602,8 +786,8 @@
           mediaKey: state.file ? await uploadFile(state.file) : null,
         };
         if (state.size === 'custom') {
-          const r = mediaRect() || state.custom;
-          payload.box = { cx: state.custom.cx, cy: state.custom.cy, w: r.w, h: r.h };
+          const r = frameRect() || { left: state.custom.cx - state.custom.w / 2, top: state.custom.cy - state.custom.h / 2, ...state.custom };
+          payload.box = { cx: r.left + r.w / 2, cy: r.top + r.h / 2, w: r.w, h: r.h };
         }
         if (Number($('duration').value) > 0) payload.durationMs = Number($('duration').value) * 1000;
         if ($('muted').checked) payload.muted = true;
@@ -612,7 +796,9 @@
         await api('/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         const online = onlineIds();
         setStatus(target
-          ? (online.has(target.id) ? `📺 Envoyé sur l'écran de ${target.name}.` : `Envoyé, mais l'OLYCITY Live de ${target.name} n'est pas connecté.`)
+          ? (online.has(target.id)
+            ? `📺 Envoyé sur l'écran de ${target.name}${online.has(state.me.id) && target.id !== state.me.id ? ' et sur le tien' : ''}.`
+            : `Envoyé, mais l'OLYCITY Live de ${target.name} n'est pas connecté${online.has(state.me.id) ? ' : tu le verras quand même sur le tien' : ''}.`)
           : (online.size ? `📺 Envoyé sur ${online.size} écran${online.size > 1 ? 's' : ''}.` : 'Envoyé, mais aucun écran n\'est connecté.'), 'ok');
         $('text').value = '';
         $('count').textContent = '0';
@@ -646,12 +832,8 @@
     $('sizes').addEventListener('click', e => {
       const button = e.target.closest('button');
       if (!button) return;
-      if (button.dataset.size === 'custom' && state.size !== 'custom') {
-        state.custom = { ...PRESETS[state.size] };
-        fitCustomToMedia();
-      }
-      state.size = button.dataset.size;
-      $('sizes').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b === button)));
+      if (button.dataset.size === 'custom') enterFree();
+      else setSize(button.dataset.size);
       render();
     });
     $('textPos').addEventListener('click', e => {
