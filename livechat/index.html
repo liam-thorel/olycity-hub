@@ -120,6 +120,21 @@
     .gridlines::after { top:50%; left:0; right:0; height:1px; }
     .screen.free .gridlines { opacity:1; }
     .tools { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; }
+    /* Découpe d'une vidéo : début et fin seulement, sur une bande de vignettes. */
+    .trim { display:flex; flex-direction:column; gap:8px; padding:12px; border:1px solid var(--border); border-radius:10px; background:var(--surf); }
+    .trim-head { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; }
+    .trim-times { font:600 13px 'Tomorrow', sans-serif; color:var(--text); font-variant-numeric:tabular-nums; margin-right:auto; }
+    .track { position:relative; height:52px; border-radius:8px; background:var(--surf3); cursor:pointer; touch-action:none; user-select:none; }
+    .thumbs { position:absolute; inset:0; display:flex; overflow:hidden; border-radius:8px; }
+    .thumbs img { flex:1; min-width:0; height:100%; object-fit:cover; }
+    .shade { position:absolute; top:0; bottom:0; background:rgba(10,12,16,.72); pointer-events:none; }
+    #shadeStart { left:0; border-radius:8px 0 0 8px; }
+    #shadeEnd { right:0; border-radius:0 8px 8px 0; }
+    .sel { position:absolute; top:-2px; bottom:-2px; border:2px solid var(--gold); border-radius:6px; pointer-events:none; }
+    .playhead { position:absolute; top:-4px; bottom:-4px; width:2px; margin-left:-1px; background:#fff; box-shadow:0 0 6px rgba(0,0,0,.8); pointer-events:none; }
+    .knob { position:absolute; top:-4px; bottom:-4px; width:14px; margin-left:-7px; border-radius:4px; background:var(--gold); cursor:ew-resize; touch-action:none; }
+    .knob::after { content:''; position:absolute; left:5px; top:35%; bottom:35%; width:4px; border-left:1.5px solid rgba(0,0,0,.55); border-right:1.5px solid rgba(0,0,0,.55); }
+    .knob:focus-visible { outline:2px solid #fff; outline-offset:1px; }
     .tools .readout { margin-left:auto; font:600 12px 'Tomorrow', sans-serif; letter-spacing:.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
     .media { position:absolute; inset:0; border-radius:1.6cqw; overflow:hidden; background:rgba(0,0,0,.25); }
     .media img, .media video { width:100%; height:100%; object-fit:fill; display:block; }
@@ -238,6 +253,23 @@
           <button type="button" class="ghost" id="center">Centrer</button>
           <button type="button" class="ghost" id="fill">Plein écran</button>
           <span class="readout" id="readout"></span>
+        </div>
+        <div class="trim" id="trim" hidden>
+          <div class="trim-head">
+            <span class="label">Extrait</span>
+            <span class="trim-times" id="trimTimes"></span>
+            <button type="button" class="ghost" id="trimPlay">▶ Lire l'extrait</button>
+            <button type="button" class="ghost" id="trimReset">Toute la vidéo</button>
+          </div>
+          <div class="track" id="track">
+            <div class="thumbs" id="thumbs"></div>
+            <div class="shade" id="shadeStart"></div><div class="shade" id="shadeEnd"></div>
+            <div class="sel" id="sel"></div>
+            <div class="playhead" id="playhead"></div>
+            <div class="knob" data-knob="start" tabindex="0" role="slider" aria-label="Début de l'extrait"></div>
+            <div class="knob" data-knob="end" tabindex="0" role="slider" aria-label="Fin de l'extrait"></div>
+          </div>
+          <span class="hint" id="trimHint">Tire les poignées pour garder seulement un passage. Le fichier part entier, seul l'extrait est joué.</span>
         </div>
         <span class="hint">Aperçu à l'échelle d'un écran 16:9. Posté aussi dans le salon #livechat du Discord. Chacun peut couper l'affichage chez lui avec LIVECHAT.bat, et passer un média avec Ctrl+Maj+F9.</span>
       </section>
@@ -428,13 +460,14 @@
       setStatus('');
       fitCustomToMedia();
       render();
+      resetTrim();
     }
 
     function naturalSize(url, kind) {
       return new Promise(resolve => {
         if (kind === 'video') {
           const video = document.createElement('video');
-          video.onloadedmetadata = () => resolve({ w: video.videoWidth || 16, h: video.videoHeight || 9 });
+          video.onloadedmetadata = () => resolve({ w: video.videoWidth || 16, h: video.videoHeight || 9, duration: Number.isFinite(video.duration) ? video.duration : 0 });
           video.onerror = () => resolve({ w: 16, h: 9 });
           video.src = url;
         } else {
@@ -453,7 +486,153 @@
       $('fileCard').classList.remove('show');
       $('drop').hidden = false;
       render();
+      resetTrim();
     }
+
+    // ─── Découpe d'une vidéo ─────────────────────────────────────────────
+    // Seulement un début et une fin : le fichier part entier, le Live ne joue
+    // que ce passage. L'aperçu de l'écran boucle sur l'extrait, et la vidéo se
+    // cale sur l'image exacte pendant qu'on tire une poignée.
+    const MIN_CLIP = .3;
+    const clock = seconds => {
+      const s = Math.max(0, seconds);
+      const minutes = Math.floor(s / 60);
+      return `${minutes}:${(s - minutes * 60).toFixed(1).padStart(4, '0')}`;
+    };
+    const previewVideo = () => $('media').querySelector('video');
+    let thumbsToken = 0;
+
+    function resetTrim() {
+      const duration = state.kind === 'video' ? state.natural?.duration || 0 : 0;
+      state.trim = duration > 0 ? { start: 0, end: duration, duration } : null;
+      $('trim').hidden = !state.trim;
+      if (state.trim) { renderTrim(); buildThumbs(); }
+    }
+
+    function trimmed() {
+      const t = state.trim;
+      return Boolean(t) && (t.start > .05 || t.end < t.duration - .05);
+    }
+
+    function renderTrim(current = previewVideo()?.currentTime ?? 0) {
+      const t = state.trim;
+      if (!t) return;
+      const pct = value => `${(value / t.duration) * 100}%`;
+      $('shadeStart').style.width = pct(t.start);
+      $('shadeEnd').style.width = `${((t.duration - t.end) / t.duration) * 100}%`;
+      Object.assign($('sel').style, { left: pct(t.start), width: `${((t.end - t.start) / t.duration) * 100}%` });
+      $('track').querySelector('[data-knob=start]').style.left = pct(t.start);
+      $('track').querySelector('[data-knob=end]').style.left = pct(t.end);
+      $('playhead').style.left = pct(Math.min(t.duration, Math.max(0, current)));
+      const length = t.end - t.start;
+      $('trimTimes').textContent = `${clock(t.start)} → ${clock(t.end)} · ${length.toFixed(1)} s`;
+      $('trimHint').textContent = length > 30
+        ? 'Plus de 30 s : sur les PC, la lecture s\'arrête par défaut au bout de 30 s (réglable avec LIVECHAT.bat).'
+        : 'Tire les poignées pour garder seulement un passage. Le fichier part entier, seul l\'extrait est joué.';
+    }
+
+    // Quelques images de la vidéo le long de la bande, pour viser à l'œil.
+    async function buildThumbs() {
+      const token = ++thumbsToken;
+      $('thumbs').innerHTML = '';
+      const t = state.trim;
+      if (!t) return;
+      const video = document.createElement('video');
+      video.muted = true;
+      video.preload = 'auto';
+      video.src = state.fileUrl;
+      await new Promise(resolve => { video.onloadeddata = resolve; video.onerror = resolve; });
+      const count = 10;
+      const canvas = document.createElement('canvas');
+      canvas.height = 52;
+      canvas.width = Math.round(52 * (state.natural.w / state.natural.h)) || 92;
+      const context = canvas.getContext('2d');
+      const images = [];
+      for (let index = 0; index < count; index += 1) {
+        if (token !== thumbsToken) return;
+        video.currentTime = Math.min(t.duration - .05, (t.duration * (index + .5)) / count);
+        await new Promise(resolve => { video.onseeked = resolve; setTimeout(resolve, 1500); });
+        try {
+          context.drawImage(video, 0, 0, canvas.width, canvas.height);
+          images.push(canvas.toDataURL('image/jpeg', .6));
+        } catch { return; }
+      }
+      if (token === thumbsToken) $('thumbs').innerHTML = images.map(src => `<img src="${src}" alt="">`).join('');
+    }
+
+    function trackTime(event) {
+      const box = $('track').getBoundingClientRect();
+      return Math.min(1, Math.max(0, (event.clientX - box.left) / box.width)) * state.trim.duration;
+    }
+
+    function seekPreview(time) {
+      const video = previewVideo();
+      if (video) video.currentTime = time;
+      renderTrim(time);
+    }
+
+    function playClip() {
+      const video = previewVideo();
+      if (!video || !state.trim) return;
+      video.currentTime = state.trim.start;
+      video.play().catch(() => {});
+    }
+
+    function setKnob(knob, time) {
+      const t = state.trim;
+      if (knob === 'start') t.start = Math.min(Math.max(0, time), t.end - MIN_CLIP);
+      else t.end = Math.max(Math.min(t.duration, time), t.start + MIN_CLIP);
+      seekPreview(knob === 'start' ? t.start : t.end);
+    }
+
+    $('track').addEventListener('pointerdown', event => {
+      if (!state.trim) return;
+      event.preventDefault();
+      const knobEl = event.target.closest('.knob');
+      const video = previewVideo();
+      video?.pause();
+      // Clic sur la bande : la poignée la plus proche vient s'y placer.
+      const at = trackTime(event);
+      const knob = knobEl?.dataset.knob || (Math.abs(at - state.trim.start) <= Math.abs(at - state.trim.end) ? 'start' : 'end');
+      setKnob(knob, at);
+      const move = e => setKnob(knob, trackTime(e));
+      const up = () => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        playClip();
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+    });
+
+    $('track').addEventListener('keydown', event => {
+      const knob = event.target.closest('.knob')?.dataset.knob;
+      if (!knob || !state.trim) return;
+      const step = event.shiftKey ? 1 : .1;
+      const delta = { ArrowLeft: -step, ArrowRight: step }[event.key];
+      if (delta === undefined) return;
+      event.preventDefault();
+      previewVideo()?.pause();
+      setKnob(knob, state.trim[knob] + delta);
+    });
+
+    $('trimPlay').addEventListener('click', playClip);
+    $('trimReset').addEventListener('click', () => {
+      if (!state.trim) return;
+      Object.assign(state.trim, { start: 0, end: state.trim.duration });
+      playClip();
+      renderTrim();
+    });
+
+    // L'aperçu de l'écran ne montre que l'extrait, en boucle.
+    $('media').addEventListener('timeupdate', event => {
+      const video = event.target;
+      if (!state.trim || video.tagName !== 'VIDEO') return;
+      if (!video.paused && (video.currentTime >= state.trim.end || video.currentTime < state.trim.start - .2)) {
+        video.currentTime = state.trim.start;
+      }
+      renderTrim(video.currentTime);
+    }, true);
 
     // ─── Aperçu ──────────────────────────────────────────────────────────
     function layout() {
@@ -791,6 +970,9 @@
         }
         if (Number($('duration').value) > 0) payload.durationMs = Number($('duration').value) * 1000;
         if ($('muted').checked) payload.muted = true;
+        if (state.kind === 'video' && trimmed()) {
+          payload.trim = { startMs: Math.round(state.trim.start * 1000), endMs: Math.round(state.trim.end * 1000) };
+        }
         if (target) Object.assign(payload, { target: target.id, targetName: target.name });
         $('sendLabel').textContent = 'Affichage…';
         await api('/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
