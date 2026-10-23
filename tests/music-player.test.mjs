@@ -1,6 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {musicFrameMessage} from '../music-player.mjs';
+
+test('the frame matches the dark child scheme to preserve transparent collapsed margins',()=>{
+  const source=readFileSync(new URL('../music-player.mjs',import.meta.url),'utf8');
+  const frameRule=source.match(/#oly-music-remote iframe\{([^}]+)\}/)?.[1];
+  assert.match(frameRule || '',/background:transparent/);
+  assert.match(frameRule || '',/color-scheme:dark/);
+});
 test('music messages require both the expected window and exact origin',()=>{
   const source={}; const origin='https://musique.olycity.fr';
   assert.equal(musicFrameMessage({source:{},origin,data:{type:'olycity:music-ready'}},source,origin),null);
