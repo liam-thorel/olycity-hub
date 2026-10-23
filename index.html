@@ -100,7 +100,7 @@
       background:var(--surf); text-decoration:none; isolation:isolate;
       transition:transform .25s cubic-bezier(.22,1,.36,1), border-color .25s, box-shadow .25s;
     }
-    a.card:hover, a.card:focus-visible {
+    a.card:focus-visible {
       transform:translateY(-4px); border-color:color-mix(in srgb, var(--accent) 55%, transparent);
       box-shadow:0 24px 60px -24px color-mix(in srgb, var(--accent) 45%, transparent);
       outline:none;
@@ -111,7 +111,6 @@
 
     .art { position:relative; flex:1; min-height:200px; overflow:hidden; background:var(--surf2); }
     .art img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transition:transform .6s cubic-bezier(.22,1,.36,1); }
-    a.card:hover .art img { transform:scale(1.04); }
     .art::after { content:''; position:absolute; inset:0; background:linear-gradient(180deg, transparent 35%, var(--surf) 100%); }
 
     /* Pas d'illustration officielle pour le bot : un égaliseur animé suffit. */
@@ -146,7 +145,31 @@
     .go { display:flex; align-items:center; justify-content:space-between; margin-top:8px; padding-top:14px; border-top:1px solid var(--border);
           color:var(--accent); font:600 12px 'Tomorrow', sans-serif; letter-spacing:1.5px; text-transform:uppercase; }
     .go svg { transition:transform .25s; }
-    a.card:hover .go svg { transform:translateX(4px); }
+    a.card:active { transform:scale(.99); }
+    [hidden] { display:none !important; }
+    .card .body { flex:1; }
+    .card .art { flex:none; height:190px; min-height:0; }
+    .art-kicker { position:absolute;z-index:1;top:13px;left:14px;right:14px;font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#e2e5ee;text-shadow:0 1px 7px #000; }
+    .card h2 { font-size:20px;letter-spacing:1px; }
+    .top { gap:7px;flex-wrap:wrap; }
+    .status { font-size:9px;padding:4px 7px; }
+    .status[data-state="unavailable"] { color:var(--gold); }
+    .status[data-state="unavailable"]::before { background:var(--gold); }
+    .card-context { min-height:78px;overflow-wrap:anywhere; }
+    .card-context strong { display:block;color:var(--text);font-size:15px;font-weight:600;line-height:1.4; }
+    .card-context small { display:block;font-size:12px;line-height:1.6;margin-top:6px; }
+    .context-meta { display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-height:28px;font-size:10px;color:var(--muted); }
+    .people { display:flex;align-items:center; }
+    .person { display:inline-grid;position:relative;place-items:center;width:27px;height:27px;overflow:hidden;border-radius:50%;border:2px solid var(--surf);background:var(--surf2);font-size:10px; }
+    .person+.person { margin-left:-6px; }
+    .person img { position:absolute;inset:0;width:100%;height:100%;object-fit:cover; }
+    .card .go { margin-top:auto;font-size:10px;letter-spacing:.6px;min-height:44px; }
+    .music.is-paused .eq i { animation-play-state:paused;opacity:.5; }
+    @media(hover:hover) and (pointer:fine) {
+      a.card:hover { transform:translateY(-4px);border-color:color-mix(in srgb,var(--accent) 55%,transparent);box-shadow:0 24px 60px -24px color-mix(in srgb,var(--accent) 45%,transparent); }
+      a.card:hover .art img { transform:scale(1.04); }
+      a.card:hover .go svg { transform:translateX(4px); }
+    }
 
     .status { display:inline-flex; align-items:center; gap:7px; flex-shrink:0; padding:4px 10px; border-radius:999px;
               background:rgba(10,12,16,.7); border:1px solid var(--border2); font-size:11px; font-weight:700; color:var(--muted); backdrop-filter:blur(8px); }
@@ -163,13 +186,27 @@
     footer a { color:var(--muted); text-decoration:none; }
     footer a:hover { color:var(--text); }
 
-    @media (max-width:1180px) {
+    @media (max-width:1000px) {
       .grid { grid-template-columns:repeat(2, minmax(0,1fr)); max-width:860px; margin:0 auto; }
     }
-    @media (max-width:900px) {
-      .grid { grid-template-columns:1fr; max-width:520px; margin:0 auto; }
+    @media (max-width:650px) {
+      .grid { grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:0 auto; }
       .card { min-height:0; }
-      .art { min-height:170px; flex:none; height:170px; }
+      .card .art { height:132px;min-height:0; }
+      .body { padding:0 13px 13px;margin-top:-12px;gap:10px; }
+      .card h2 { font-size:16px;letter-spacing:.5px; }
+      .card-context strong { font-size:13px; }
+      .card-context small { font-size:11px; }
+      .card-context { min-height:100px; }
+      .card .go { font-size:10px;letter-spacing:0;gap:6px; }
+      .go svg { width:14px;flex-shrink:0; }
+      .art-kicker { font-size:8px;top:10px;left:10px;right:10px; }
+      .tags { min-height:28px; }
+      .tags span { padding:0;border:0;font-size:10px; }
+      .hero p { font-size:14px; }
+      .lc .who { font-size:10px; }
+      .lc .cap { font-size:12px; }
+      .eq { gap:4px; }.eq i { width:6px; }
     }
     @media (prefers-reduced-motion:reduce) {
       *, *::before, *::after { animation:none !important; transition:none !important; }
@@ -235,47 +272,47 @@
         </g>
       </svg>
       <h1>OLY<span>CITY</span></h1>
-      <p>Tous les outils du Discord au même endroit : stats, musique, soirées jeux et livechat.</p>
+      <p>Le Discord, au même endroit.</p>
     </header>
 
     <section class="grid" aria-label="Services OLYCITY">
       <a class="card tracker" href="https://tracker.olycity.fr">
-        <div class="art"><img src="assets/valorant-keyart.webp" alt="" loading="eager"></div>
+        <div class="art"><img src="assets/valorant-keyart.webp" alt="" loading="eager"><span class="art-kicker" data-card-kicker>Valorant · League of Legends</span></div>
         <div class="body">
-          <div class="top"><h2>Tracker</h2><span class="status" data-probe="https://tracker.olycity.fr/manifest.webmanifest">…</span></div>
-          <p>Rosters, rangs, compos par map et parties en direct.</p>
-          <div class="tags"><span>Valorant</span><span>League</span><span>Live</span></div>
-          <div class="go">tracker.olycity.fr <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+          <div class="top"><h2>Tracker</h2><span class="status">Le Live</span></div>
+          <p class="card-context"><strong data-card-title>Prêts pour la prochaine ?</strong><small data-card-detail>Rangs, compos et historique du groupe.</small></p>
+          <div class="context-meta"><span class="people" data-people hidden></span><span data-card-extra>Compos · Rangs · Live</span></div>
+          <div class="go">Ouvrir le Tracker <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
         </div>
       </a>
 
       <a class="card music" href="https://musique.olycity.fr">
-        <div class="art"><div class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+        <div class="art"><div class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><img data-music-cover alt="" hidden><span class="art-kicker">Dans le vocal</span></div>
         <div class="body">
-          <div class="top"><h2>Musique</h2><span class="status" data-probe="https://musique.olycity.fr/">…</span></div>
-          <p>Pilote le bot musique du Discord : file d'attente, recherche, playlists.</p>
+          <div class="top"><h2>Musique</h2><span class="status">Le vocal</span></div>
+          <p class="card-context"><strong data-card-title>La musique du vocal</strong><small data-card-detail>Recherche, playlists et file d’attente.</small></p>
           <div class="tags"><span>Discord</span><span>YouTube</span><span>Spotify</span></div>
-          <div class="go">musique.olycity.fr <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+          <div class="go">Ouvrir la file <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
         </div>
       </a>
 
       <a class="card games" href="https://games.olycity.fr">
-        <div class="art"><img src="assets/peak-keyart.webp" alt="" loading="lazy"></div>
+        <div class="art"><img src="assets/peak-keyart.webp" alt="" loading="lazy"><span class="art-kicker" data-card-kicker>Le coin jeux du Discord</span></div>
         <div class="body">
-          <div class="top"><h2>Games</h2><span class="status" data-probe="https://games.olycity.fr/manifest.webmanifest">…</span></div>
-          <p>Catalogue coop, organisation des soirées et jeux maison à plusieurs.</p>
-          <div class="tags"><span>Coop</span><span>Soirées</span><span>Jeux maison</span></div>
-          <div class="go">games.olycity.fr <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+          <div class="top"><h2>Games</h2><span class="status">Les soirées</span></div>
+          <p class="card-context"><strong data-card-title>On joue à quoi ?</strong><small data-card-detail>Choisissez le prochain jeu et le bon créneau.</small></p>
+          <div class="context-meta"><span class="people" data-people hidden></span><span>Coop · Soirées · Jeux maison</span></div>
+          <div class="go">Choisir un jeu <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
         </div>
       </a>
 
       <a class="card livechat" href="livechat/">
-        <div class="art"><div class="lc" aria-hidden="true"><div class="meme"><span class="who">Nico</span><span class="cap">GG LA TEAM</span></div></div></div>
+        <div class="art"><div class="lc" aria-hidden="true"><div class="meme"><span class="who">OLYCITY</span><span class="cap">GG LA TEAM</span></div></div></div>
         <div class="body">
-          <div class="top"><h2>Livechat</h2><span class="status" data-probe="https://olycity-livechat.olycity.workers.dev/">…</span></div>
-          <p>Balance une image, un GIF ou une vidéo directement sur l'écran des potes en pleine partie.</p>
+          <div class="top"><h2>Livechat</h2><span class="status">Les écrans</span></div>
+          <p class="card-context"><strong data-card-title>Un mème bien placé.</strong><small data-card-detail>Images, GIF et extraits vidéo, directement en jeu.</small></p>
           <div class="tags"><span>Mèmes</span><span>Vidéos</span><span>OLYCITY Live</span></div>
-          <div class="go">olycity.fr/livechat <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+          <div class="go">Envoyer un mème <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
         </div>
       </a>
     </section>
@@ -286,25 +323,7 @@
     <a href="https://github.com/liam-thorel/OLYVALO/releases/latest">Télécharger OLYCITY Live</a>
   </footer>
 
-  <script>
-    // Indicateur en ligne / hors ligne. Les sous-domaines n'envoient pas
-    // d'en-têtes CORS : une requête no-cors qui aboutit (réponse opaque)
-    // suffit à prouver que le service répond, un échec réseau qu'il est tombé.
-    document.querySelectorAll('.status[data-probe]').forEach(async (el) => {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 6000);
-      try {
-        await fetch(el.dataset.probe, { mode: 'no-cors', cache: 'no-store', signal: ctrl.signal });
-        el.dataset.state = 'online';
-        el.textContent = 'En ligne';
-      } catch {
-        el.dataset.state = 'offline';
-        el.textContent = 'Hors ligne';
-      } finally {
-        clearTimeout(timer);
-      }
-    });
-  </script>
+  <script type="module" src="./hub-activity.mjs"></script>
   <script type="module" src="./music-player.mjs"></script>
 </body>
 </html>
