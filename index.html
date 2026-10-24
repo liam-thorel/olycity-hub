@@ -136,7 +136,10 @@
                color:#fff; -webkit-text-stroke:4px #000; paint-order:stroke fill; }
     @keyframes pop { 0%, 8% { opacity:0; transform:translate(-50%,-50%) scale(.9); } 16%, 80% { opacity:1; transform:translate(-50%,-50%) scale(1); } 90%, 100% { opacity:0; transform:translate(-50%,-50%) scale(1); } }
 
-    .body { position:relative; z-index:1; display:flex; flex-direction:column; gap:10px; padding:0 22px 22px; margin-top:-34px; }
+    /* Cover the artwork's clipped edge with an opaque two-pixel overlap.
+       Transformed images can otherwise leave a coloured seam at fractional pixels. */
+    .body { --art-overlap:34px; position:relative; z-index:1; display:flex; flex-direction:column; gap:10px; padding:0 22px 22px; margin-top:calc(0px - var(--art-overlap));
+            background:linear-gradient(to bottom, transparent calc(var(--art-overlap) - 2px), var(--surf) calc(var(--art-overlap) - 2px)); }
     .top { display:flex; align-items:center; justify-content:space-between; gap:12px; }
     .card h2 { font:700 24px/1.1 'Tomorrow', sans-serif; letter-spacing:2px; text-transform:uppercase; }
     .card p { color:var(--muted); font-size:14px; }
@@ -193,7 +196,7 @@
       .grid { grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:0 auto; }
       .card { min-height:0; }
       .card .art { height:132px;min-height:0; }
-      .body { padding:0 13px 13px;margin-top:-12px;gap:10px; }
+      .body { --art-overlap:12px; padding:0 13px 13px;gap:10px; }
       .card h2 { font-size:16px;letter-spacing:.5px; }
       .card-context strong { font-size:13px; }
       .card-context small { font-size:11px; }
