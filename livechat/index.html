@@ -55,6 +55,16 @@
     .drop strong { color:var(--text); }
     .drop small { font-size:12px; color:var(--dim); }
     .drop input { position:absolute; inset:0; opacity:0; cursor:pointer; }
+    .cam-open { align-self:flex-start; }
+    .cam { display:flex; flex-direction:column; gap:8px; padding:8px; border:1px solid var(--border2); border-radius:10px; background:var(--surf2); }
+    .cam[hidden] { display:none; }
+    .cam video { width:100%; aspect-ratio:16/9; border-radius:8px; background:#000; object-fit:cover; transform:scaleX(-1); }
+    .cam-bar { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+    .cam-bar button.shot { border:0; border-radius:8px; padding:8px 12px; background:var(--red); color:#fff; font-weight:600; cursor:pointer; }
+    .cam-bar button.shot[aria-pressed=true] { background:#fff; color:var(--red); }
+    .cam-bar button:disabled { opacity:.5; cursor:default; }
+    .cam-bar .rec { color:var(--red); font-variant-numeric:tabular-nums; font-size:13px; }
+    .cam-bar .ghost { margin-left:auto; }
     .file { display:none; align-items:center; gap:10px; padding:8px; border:1px solid var(--border2); border-radius:10px; background:var(--surf2); }
     .file.show { display:flex; }
     .file img, .file video { width:56px; height:56px; border-radius:6px; object-fit:cover; background:#000; }
@@ -185,6 +195,16 @@
             <small id="limit">PNG, JPEG, WebP, GIF, MP4, WebM ou MOV · 500 Mo maximum</small>
             <input type="file" id="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp,video/mp4,video/webm,video/quicktime">
           </label>
+          <button type="button" class="ghost cam-open" id="camOpen">📷 Webcam : photo ou vidéo</button>
+          <div class="cam" id="cam" hidden>
+            <video id="camVideo" autoplay muted playsinline></video>
+            <div class="cam-bar">
+              <button type="button" class="shot" id="camPhoto">📸 Photo</button>
+              <button type="button" class="shot" id="camRecord" aria-pressed="false">⏺ Vidéo</button>
+              <span class="rec" id="camTimer" aria-live="polite"></span>
+              <button type="button" class="ghost" id="camClose">Fermer</button>
+            </div>
+          </div>
           <div class="file" id="fileCard">
             <span id="thumb"></span>
             <div><span id="fileName"></span><small id="fileMeta"></small></div>
@@ -271,12 +291,13 @@
           </div>
           <span class="hint" id="trimHint">Tire les poignées pour garder seulement un passage. Le fichier part entier, seul l'extrait est joué.</span>
         </div>
-        <span class="hint">Aperçu à l'échelle d'un écran 16:9. Posté aussi dans le salon #livechat du Discord. Chacun peut couper l'affichage chez lui avec LIVECHAT.bat, et passer un média avec Ctrl+Maj+F9.</span>
+        <span class="hint">Aperçu à l'échelle d'un écran 16:9. Posté aussi dans le salon #livechat du Discord. Chacun peut couper ou réactiver l'affichage chez lui (Ctrl+Maj+F10), et passer un média (Ctrl+Maj+F9) ; ces touches se changent dans LIVECHAT.bat.</span>
       </section>
     </div>
   </main>
 
   <script type="module">
+    import { createWebcam, recordClock } from './webcam.mjs';
     // URL du Worker workers/livechat (dépôt OLYVALO), affichée par `wrangler deploy`.
     const LIVECHAT_ENDPOINT = 'https://olycity-livechat.olycity.workers.dev';
     const FIREBASE = 'https://realtime-database-5bb9f-default-rtdb.europe-west1.firebasedatabase.app';
@@ -457,6 +478,9 @@
         + (file.size > MAX_UPLOAD ? ' · trop lourd (500 Mo max)' : '');
       $('fileCard').classList.add('show');
       $('drop').hidden = true;
+      webcam.close();
+      $('cam').hidden = true;
+      $('camOpen').hidden = true;
       setStatus('');
       fitCustomToMedia();
       render();
@@ -485,6 +509,7 @@
       $('file').value = '';
       $('fileCard').classList.remove('show');
       $('drop').hidden = false;
+      $('camOpen').hidden = false;
       render();
       resetTrim();
     }
@@ -993,6 +1018,28 @@
         $('bar').style.transform = 'scaleX(0)';
       }
     });
+
+    // ─── Webcam ──────────────────────────────────────────────────────────
+    // La photo ou la vidéo devient le média de l'envoi, comme un fichier
+    // déposé : aperçu, format, extrait et envoi restent les mêmes.
+    const webcam = createWebcam({
+      video: $('camVideo'),
+      onFile: file => setFile(file),
+      onError: message => setStatus(message, 'err'),
+      onState: ({ open, recording, elapsedMs }) => {
+        $('cam').hidden = !open;
+        $('camOpen').hidden = open || Boolean(state.file);
+        $('camPhoto').disabled = recording;
+        $('camRecord').setAttribute('aria-pressed', String(recording));
+        $('camRecord').textContent = recording ? '⏹ Arrêter' : '⏺ Vidéo';
+        $('camTimer').textContent = recording ? `● ${recordClock(elapsedMs)}` : '';
+      },
+    });
+    $('camOpen').addEventListener('click', () => { setStatus(''); webcam.open(); });
+    $('camClose').addEventListener('click', () => webcam.close());
+    $('camPhoto').addEventListener('click', () => webcam.photo());
+    $('camRecord').addEventListener('click', () => (webcam.recording ? webcam.stopRecording() : webcam.startRecording()));
+    window.addEventListener('pagehide', () => webcam.close());
 
     // ─── Événements ──────────────────────────────────────────────────────
     $('file').addEventListener('change', () => setFile($('file').files[0]));
