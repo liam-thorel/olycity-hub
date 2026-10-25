@@ -78,6 +78,9 @@
     .me img, .me i { width:40px; height:40px; border-radius:50%; object-fit:cover; background:var(--surf3); box-shadow:0 0 0 2px var(--red); }
     .me span { display:flex; flex-direction:column; line-height:1.25; }
     .me small { color:var(--muted); font-size:12px; }
+    .admin { display:grid; grid-template-columns:1fr auto; gap:8px; margin-top:10px; padding:12px; border:1px dashed var(--border2); border-radius:8px; }
+    .admin .label, .admin .hint { grid-column:1 / -1; }
+    .admin button { border:0; border-radius:8px; padding:0 16px; background:var(--red); color:#fff; font-weight:600; cursor:pointer; }
     .discord { display:inline-flex; align-items:center; justify-content:center; gap:10px; width:100%; height:44px; border:0; border-radius:8px; background:#5865f2; color:#fff; font-weight:700; cursor:pointer; transition:filter .2s; }
     .discord:hover { filter:brightness(1.1); }
     .discord svg { width:22px; height:22px; }
@@ -185,6 +188,12 @@
         <div class="field">
           <span class="label">Ton compte</span>
           <div class="account" id="account"><span class="hint">Vérification…</span></div>
+          <div class="admin" id="admin" hidden>
+            <span class="label">Réactiver le livechat (Liam)</span>
+            <select id="reenableWho" aria-label="Chez qui"></select>
+            <button type="button" id="reenable">Réactiver</button>
+            <span class="hint" id="adminHint">Pour quelqu'un qui l'a coupé avec sa touche. Même chose que /livechat-reactiver sur Discord.</span>
+          </div>
         </div>
 
         <div class="field">
@@ -291,7 +300,7 @@
           </div>
           <span class="hint" id="trimHint">Tire les poignées pour garder seulement un passage. Le fichier part entier, seul l'extrait est joué.</span>
         </div>
-        <span class="hint">Aperçu à l'échelle d'un écran 16:9. Posté aussi dans le salon #livechat du Discord. Chacun peut couper ou réactiver l'affichage chez lui (Ctrl+Maj+F10), et passer un média (Ctrl+Maj+F9) ; ces touches se changent dans LIVECHAT.bat.</span>
+        <span class="hint">Aperçu à l'échelle d'un écran 16:9. Posté aussi dans le salon #livechat du Discord. Chacun peut couper ou réactiver l'affichage chez lui (Ctrl+Maj+F10), et passer un média (Ctrl+Maj+F9) ; ces touches se changent dans l'overlay (bouton 📺 Livechat) ou dans LIVECHAT.bat.</span>
       </section>
     </div>
   </main>
@@ -323,7 +332,7 @@
 
     const $ = id => document.getElementById(id);
     const state = {
-      members: [], receivers: {}, me: null, file: null, fileUrl: '', kind: null, natural: null,
+      members: [], receivers: {}, me: null, admin: false, file: null, fileUrl: '', kind: null, natural: null,
       size: 'moyen', custom: { cx:.5, cy:.45, w:.4, h:.4 }, textPos: 'bas', target: '',
     };
 
@@ -377,6 +386,7 @@
     function logout() {
       storage.drop(TOKEN_KEY);
       state.me = null;
+      state.admin = false;
       renderAccount();
       render();
     }
@@ -410,7 +420,11 @@
     async function loadAccount() {
       if (!token()) { renderAccount(); return; }
       try {
-        state.me = (await api('/me')).member;
+        const me = await api('/me');
+        state.me = me.member;
+        // Le Worker ne répond « admin » que pour Liam, et revérifie à chaque
+        // réactivation : ce drapeau ne fait qu'afficher le panneau.
+        state.admin = me.admin === true;
         renderAccount();
       } catch (error) {
         renderAccount(error.message);
@@ -419,6 +433,7 @@
     }
 
     function renderAccount(problem = '') {
+      renderAdmin();
       const box = $('account');
       if (state.me) {
         box.innerHTML = `<div class="me">${avatarHtml(state.me)}<span><strong>${escapeHtml(state.me.name)}</strong><small>connecté avec Discord</small></span></div>
@@ -433,6 +448,38 @@
       $('login').addEventListener('click', login);
     }
 
+    // ─── Réactivation à distance (Liam) ──────────────────────────────────
+    function renderAdmin() {
+      $('admin').hidden = !(state.me && state.admin);
+      const select = $('reenableWho');
+      if ($('admin').hidden || document.activeElement === select) return;
+      const chosen = select.value || 'all';
+      const now = Date.now();
+      const muted = id => {
+        const r = state.receivers[id];
+        return r && r.enabled === false && now - Number(r.ts || 0) <= RECEIVER_FRESH_MS;
+      };
+      select.innerHTML = '<option value="all">Chez tout le monde</option>'
+        + state.members.map(m => `<option value="${escapeHtml(m.id)}">${muted(m.id) ? '🔇 ' : ''}${escapeHtml(m.name)}</option>`).join('');
+      select.value = [...select.options].some(o => o.value === chosen) ? chosen : 'all';
+      const off = state.members.filter(m => muted(m.id));
+      $('adminHint').textContent = off.length
+        ? `Coupé chez : ${off.map(m => m.name).join(', ')}.`
+        : 'Personne ne l\'a coupé en ce moment. Même chose que /livechat-reactiver sur Discord.';
+    }
+
+    async function reenable() {
+      const who = $('reenableWho').value || 'all';
+      setStatus('Réactivation…');
+      try {
+        await api('/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target: who }) });
+        const name = state.members.find(m => m.id === who)?.name;
+        setStatus(`Livechat réactivé ${name ? `chez ${name}` : 'chez tout le monde'} : c'est appliqué en quelques secondes.`, 'ok');
+      } catch (error) {
+        setStatus(error.message, 'err');
+      }
+    }
+
     async function loadReceivers() {
       state.receivers = await fetch(`${FIREBASE}/livechat/receivers.json`).then(r => r.json()).catch(() => state.receivers) || {};
       const online = state.members.filter(m => onlineIds().has(m.id));
@@ -443,6 +490,7 @@
           + online.map(m => `<span class="chip">${avatarHtml(m)}${escapeHtml(m.name)}</span>`).join('')
         : '<span>Aucun OLYCITY Live connecté pour l\'instant</span>');
       renderTargets();
+      renderAdmin();
     }
 
     function renderTargets() {
@@ -1080,6 +1128,7 @@
 
     readOAuthReturn();
     loadAccount();
+    $('reenable').addEventListener('click', reenable);
     loadMembers().then(loadReceivers);
     setInterval(loadReceivers, 20000);
   </script>
