@@ -367,9 +367,32 @@
       drop(key) { try { localStorage.removeItem(key); } catch { /* navigation privée */ } },
     };
 
+    // Connexion unique avec le site et la musique : le jeton Discord est
+    // partagé par un cookie sur tout olycity.fr (même format que
+    // OLYVALO/js/discord-account.mjs : v1|<expiration en ms>|<jeton>).
+    const SHARED_COOKIE = 'olycity_discord';
+    const sharedDomain = () => (location.hostname === 'olycity.fr' || location.hostname.endsWith('.olycity.fr') ? 'olycity.fr' : null);
+    const TOKEN_RE = /^[A-Za-z0-9._~-]{16,200}$/;
+    function sharedLogin() {
+      const entry = document.cookie.split(/;\s*/).find(part => part.startsWith(`${SHARED_COOKIE}=`));
+      let value = '';
+      try { value = decodeURIComponent(entry?.slice(SHARED_COOKIE.length + 1) || ''); } catch { return null; }
+      const match = /^v1\|(\d{10,16})\|(.+)$/.exec(value);
+      return match && TOKEN_RE.test(match[2]) && Number(match[1]) > Date.now() ? { token: match[2], expiresAt: Number(match[1]) } : null;
+    }
+    function shareLogin(value, seconds) {
+      if (!sharedDomain() || !TOKEN_RE.test(value)) return;
+      const maxAge = Math.max(60, Math.round(seconds));
+      document.cookie = `${SHARED_COOKIE}=${encodeURIComponent(`v1|${Date.now() + maxAge * 1000}|${value}`)}; Domain=${sharedDomain()}; Path=/; Max-Age=${maxAge}; Secure; SameSite=Lax`;
+    }
+    function forgetSharedLogin() {
+      if (sharedDomain()) document.cookie = `${SHARED_COOKIE}=; Domain=${sharedDomain()}; Path=/; Max-Age=0; Secure; SameSite=Lax`;
+    }
+
     function token() {
       const saved = storage.get(TOKEN_KEY);
-      return saved && saved.expiresAt > Date.now() ? saved.token : null;
+      if (saved && saved.expiresAt > Date.now()) return saved.token;
+      return sharedLogin()?.token || null;
     }
 
     function login() {
@@ -385,6 +408,8 @@
 
     function logout() {
       storage.drop(TOKEN_KEY);
+      // Déconnecté ici, déconnecté aussi sur le site et la musique.
+      forgetSharedLogin();
       state.me = null;
       state.admin = false;
       renderAccount();
@@ -399,10 +424,12 @@
       storage.drop(STATE_KEY);
       if (params.get('error')) { setStatus('Connexion Discord annulée.', 'err'); return; }
       if (!expected || params.get('state') !== expected) { setStatus('Connexion Discord refusée (état invalide), réessaie.', 'err'); return; }
+      const lifetime = Number(params.get('expires_in') || 3600);
       storage.set(TOKEN_KEY, {
         token: params.get('access_token'),
-        expiresAt: Date.now() + Number(params.get('expires_in') || 3600) * 1000 - 60000,
+        expiresAt: Date.now() + lifetime * 1000 - 60000,
       });
+      shareLogin(params.get('access_token'), lifetime - 60);
     }
 
     async function api(path, options = {}) {
@@ -412,7 +439,7 @@
       }).catch(() => null);
       if (!res) throw new Error('Serveur livechat injoignable.');
       const body = await res.json().catch(() => ({}));
-      if (res.status === 401) { storage.drop(TOKEN_KEY); state.me = null; renderAccount(); }
+      if (res.status === 401) { storage.drop(TOKEN_KEY); forgetSharedLogin(); state.me = null; state.admin = false; renderAccount(); }
       if (!res.ok) throw Object.assign(new Error(body.error || `Erreur ${res.status}`), { status: res.status });
       return body;
     }
